@@ -1,0 +1,193 @@
+{
+  "name": "cortex",
+  "displayName": "Cortex",
+  "description": "Semantic cognition layer for your workspace - organize files by contexts, tags, and types",
+  "version": "0.1.0",
+  "publisher": "your-publisher-name",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "cortex",
+          "title": "Cortex",
+          "icon": "resources/cortex-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "cortex": [
+        {
+          "id": "cortex-contextView",
+          "name": "By Context"
+        },
+        {
+          "id": "cortex-tagView",
+          "name": "By Tag"
+        },
+        {
+          "id": "cortex-typeView",
+          "name": "By Type"
+        },
+        {
+          "id": "cortex-dateView",
+          "name": "By Date"
+        },
+        {
+          "id": "cortex-sizeView",
+          "name": "By Size"
+        },
+        {
+          "id": "cortex-folderView",
+          "name": "By Folder"
+        },
+        {
+          "id": "cortex-contentTypeView",
+          "name": "By Content Type"
+        },
+        {
+          "id": "cortex-codeMetricsView",
+          "name": "Code Metrics"
+        },
+        {
+          "id": "cortex-documentMetricsView",
+          "name": "Documents"
+        },
+        {
+          "id": "cortex-issuesView",
+          "name": "Issues"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "cortex.addTag",
+        "title": "Cortex: Add tag to current file",
+        "icon": "$(tag)"
+      },
+      {
+        "command": "cortex.assignContext",
+        "title": "Cortex: Assign context to current file",
+        "icon": "$(folder)"
+      },
+      {
+        "command": "cortex.openView",
+        "title": "Cortex: Open Cortex View",
+        "icon": "$(compass)"
+      },
+      {
+        "command": "cortex.rebuildIndex",
+        "title": "Cortex: Rebuild Index",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "cortex.enableAccordion",
+        "title": "Cortex: Enable Accordion Mode",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "cortex.disableAccordion",
+        "title": "Cortex: Disable Accordion Mode",
+        "icon": "$(list-unordered)"
+      },
+      {
+        "command": "cortex.expandAll",
+        "title": "Cortex: Expand All",
+        "icon": "$(expand-all)"
+      },
+      {
+        "command": "cortex.collapseAll",
+        "title": "Cortex: Collapse All",
+        "icon": "$(collapse-all)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "cortex.addTag"
+        },
+        {
+          "command": "cortex.assignContext"
+        },
+        {
+          "command": "cortex.openView"
+        },
+        {
+          "command": "cortex.rebuildIndex"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "cortex.addTag",
+          "group": "cortex@1",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "cortex.assignContext",
+          "group": "cortex@2",
+          "when": "editorTextFocus"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "cortex.rebuildIndex",
+          "when": "view == cortex-contextView || view == cortex-tagView || view == cortex-typeView",
+          "group": "navigation"
+        },
+        {
+          "command": "cortex.enableAccordion",
+          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && !cortex.accordionEnabled",
+          "group": "navigation"
+        },
+        {
+          "command": "cortex.disableAccordion",
+          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && cortex.accordionEnabled",
+          "group": "navigation"
+        },
+        {
+          "command": "cortex.expandAll",
+          "when": "view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView",
+          "group": "navigation"
+        },
+        {
+          "command": "cortex.collapseAll",
+          "when": "view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@types/adm-zip": "^0.5.7",
+    "@types/better-sqlite3": "^7.6.9",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.80.0",
+    "@typescript-eslint/eslint-plugin": "^8.50.0",
+    "@typescript-eslint/parser": "^8.50.0",
+    "eslint": "^9.39.2",
+    "typescript": "^5.3.3",
+    "typescript-eslint": "^8.50.0"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "better-sqlite3": "^9.3.0"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run compile:*)",
+      "Bash(npx @vscode/vsce:*)",
+      "Bash(npm rebuild:*)",
+      "Bash(node -e:*)",
+      "Bash(cat:*)",
+      "Bash(npm install:*)",
+      "Bash(npm ls:*)",
+      "Bash(tree:*)",
+      "Bash(npm run lint:*)"
+    ]
+  }
+}
