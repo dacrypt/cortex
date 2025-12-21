@@ -1,5 +1,5 @@
 /**
- * Command: Assign context to current file
+ * Command: Assign project to current file
  */
 
 import * as vscode from 'vscode';
@@ -39,19 +39,19 @@ export async function assignContextCommand(
   // Get or create metadata
   metadataStore.getOrCreateMetadata(relativePath, fileEntry.extension);
 
-  // Get existing contexts for suggestions
+  // Get existing projects for suggestions
   const existingContexts = metadataStore.getAllContexts();
 
   // Show input box
   const context = await vscode.window.showInputBox({
-    prompt: 'Enter context name',
-    placeHolder: 'e.g., project-alpha, client-acme, case-2024-01',
+    prompt: 'Enter project name',
+    placeHolder: 'e.g., book-draft, car-purchase, client-acme',
     validateInput: (value) => {
       if (!value || value.trim().length === 0) {
-        return 'Context name cannot be empty';
+        return 'Project name cannot be empty';
       }
       if (value.includes(',')) {
-        return 'Context name cannot contain commas';
+        return 'Project name cannot contain commas';
       }
       return null;
     },
@@ -70,6 +70,6 @@ export async function assignContextCommand(
   onMetadataChanged();
 
   vscode.window.showInformationMessage(
-    `Added context "${normalizedContext}" to ${fileEntry.filename}`
+    `Added project "${normalizedContext}" to ${fileEntry.filename}`
   );
 }

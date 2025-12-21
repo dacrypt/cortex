@@ -158,12 +158,15 @@ try {
 3. **Test error cases** - Invalid input, missing files
 4. **Test performance** - Large workspaces (10k+ files)
 
-### Automated Testing (Future)
+### Automated Testing
 
-We plan to add:
-- Unit tests (Jest)
-- Integration tests (VS Code test runner)
-- E2E tests (automated Extension Development Host)
+Run the extension test suite with:
+
+```bash
+npm test
+```
+
+The suite exercises core modules, extractors, view providers, and commands using the VS Code test runner.
 
 ## Pull Request Guidelines
 

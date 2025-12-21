@@ -58,8 +58,8 @@ Semantic folder structure:
 User manually tags files →
   Files appear in "By Tag" view
 
-User manually assigns contexts →
-  Files appear in "By Context" view
+User manually assigns projects →
+  Files appear in "By Project" view
 ```
 
 ### Now (Manual + Automatic)
@@ -70,8 +70,8 @@ Files scanned →
     - File size → "By Size" view
     - Folder location → "By Folder" view
 
-User can ALSO manually tag/context →
-  Files appear in "By Tag" / "By Context" views
+User can ALSO manually tag/project →
+  Files appear in "By Tag" / "By Project" views
 ```
 
 ---
@@ -254,4 +254,4 @@ After pressing F5, verify:
 
 ---
 
-**Cortex is now even smarter** - combining manual semantics (tags, contexts) with automatic metadata (dates, sizes, folders) for the ultimate file organization system! 🧠✨
+**Cortex is now even smarter** - combining manual semantics (tags, projects) with automatic metadata (dates, sizes, folders) for the ultimate file organization system! 🧠✨
