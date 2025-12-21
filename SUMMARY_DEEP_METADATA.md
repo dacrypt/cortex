@@ -25,7 +25,7 @@
 You now have **8 total views**:
 
 ### Manual Organization
-1. **By Context** - User-defined projects/clients
+1. **By Project** - User-defined projects/clients
 2. **By Tag** - User-defined tags
 
 ### Automatic Groupings

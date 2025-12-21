@@ -14,6 +14,9 @@ export interface IMetadataStore {
   removeTag(relativePath: string, tag: string): void;
   addContext(relativePath: string, context: string): void;
   removeContext(relativePath: string, context: string): void;
+  addSuggestedContext(relativePath: string, context: string): void;
+  clearSuggestedContexts(relativePath: string): void;
+  getSuggestedContexts(relativePath: string): string[];
   updateNotes(relativePath: string, notes: string): void;
   getFilesByTag(tag: string): string[];
   getFilesByContext(context: string): string[];

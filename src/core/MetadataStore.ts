@@ -78,11 +78,21 @@ export class MetadataStore {
       );
     `);
 
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS file_context_suggestions (
+        file_id TEXT NOT NULL,
+        context TEXT NOT NULL,
+        PRIMARY KEY (file_id, context),
+        FOREIGN KEY (file_id) REFERENCES file_metadata(file_id) ON DELETE CASCADE
+      );
+    `);
+
     // Create indexes for performance
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_file_tags_tag ON file_tags(tag);
       CREATE INDEX IF NOT EXISTS idx_file_contexts_context ON file_contexts(context);
       CREATE INDEX IF NOT EXISTS idx_file_metadata_type ON file_metadata(type);
+      CREATE INDEX IF NOT EXISTS idx_file_context_suggestions_context ON file_context_suggestions(context);
     `);
   }
 
@@ -122,6 +132,7 @@ export class MetadataStore {
       relativePath,
       tags: [],
       contexts: [],
+      suggestedContexts: [],
       type,
       created_at: now,
       updated_at: now,
@@ -160,11 +171,19 @@ export class MetadataStore {
     `);
     const contexts = (contextsStmt.all(fileId) as any[]).map((r) => r.context);
 
+    const suggestionsStmt = this.db.prepare(`
+      SELECT context FROM file_context_suggestions WHERE file_id = ?
+    `);
+    const suggestedContexts = (suggestionsStmt.all(fileId) as any[]).map(
+      (r) => r.context
+    );
+
     return {
       file_id: row.file_id,
       relativePath: row.relative_path,
       tags,
       contexts,
+      suggestedContexts,
       type: row.type,
       notes: row.notes,
       created_at: row.created_at,
@@ -268,6 +287,66 @@ export class MetadataStore {
     stmt.run(fileId, context);
 
     this.touchFile(fileId);
+  }
+
+  /**
+   * Add suggested context to a file
+   *
+   * @param relativePath - Workspace-relative path
+   * @param context - Suggested context to add
+   */
+  addSuggestedContext(relativePath: string, context: string): void {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    const fileId = generateFileId(relativePath);
+
+    const stmt = this.db.prepare(`
+      INSERT OR IGNORE INTO file_context_suggestions (file_id, context)
+      VALUES (?, ?)
+    `);
+    stmt.run(fileId, context);
+
+    this.touchFile(fileId);
+  }
+
+  /**
+   * Clear suggested contexts for a file
+   *
+   * @param relativePath - Workspace-relative path
+   */
+  clearSuggestedContexts(relativePath: string): void {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    const fileId = generateFileId(relativePath);
+
+    const stmt = this.db.prepare(`
+      DELETE FROM file_context_suggestions WHERE file_id = ?
+    `);
+    stmt.run(fileId);
+
+    this.touchFile(fileId);
+  }
+
+  /**
+   * Get suggested contexts for a file
+   *
+   * @param relativePath - Workspace-relative path
+   * @returns Array of suggested contexts
+   */
+  getSuggestedContexts(relativePath: string): string[] {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    const fileId = generateFileId(relativePath);
+    const stmt = this.db.prepare(`
+      SELECT context FROM file_context_suggestions WHERE file_id = ?
+    `);
+    return (stmt.all(fileId) as any[]).map((r) => r.context);
   }
 
   /**

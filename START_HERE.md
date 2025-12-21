@@ -19,7 +19,7 @@ Look for these signs of success:
 - It's a brain/network icon with connected nodes
 
 ✅ **Click the icon** → You should see three views:
-- "BY CONTEXT"
+- "BY PROJECT"
 - "BY TAG"
 - "BY TYPE" ← This should already show your file types!
 

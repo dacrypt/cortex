@@ -81,6 +81,7 @@ export class MetadataStoreJSON implements IMetadataStore {
       relativePath,
       tags: [],
       contexts: [],
+      suggestedContexts: [],
       type,
       created_at: now,
       updated_at: now,
@@ -122,6 +123,7 @@ export class MetadataStoreJSON implements IMetadataStore {
         relativePath: file.relativePath,
         tags: [],
         contexts: [],
+        suggestedContexts: [],
         type,
         created_at: now,
         updated_at: now,
@@ -235,6 +237,54 @@ export class MetadataStoreJSON implements IMetadataStore {
 
     metadata.updated_at = Date.now();
     this.save();
+  }
+
+  /**
+   * Add suggested context to a file
+   */
+  addSuggestedContext(relativePath: string, context: string): void {
+    const fileId = generateFileId(relativePath);
+    const metadata = this.store.files[fileId];
+
+    if (!metadata) {
+      return;
+    }
+
+    if (!metadata.suggestedContexts) {
+      metadata.suggestedContexts = [];
+    }
+
+    if (!metadata.suggestedContexts.includes(context)) {
+      metadata.suggestedContexts.push(context);
+    }
+
+    metadata.updated_at = Date.now();
+    this.save();
+  }
+
+  /**
+   * Clear suggested contexts for a file
+   */
+  clearSuggestedContexts(relativePath: string): void {
+    const fileId = generateFileId(relativePath);
+    const metadata = this.store.files[fileId];
+
+    if (!metadata) {
+      return;
+    }
+
+    metadata.suggestedContexts = [];
+    metadata.updated_at = Date.now();
+    this.save();
+  }
+
+  /**
+   * Get suggested contexts for a file
+   */
+  getSuggestedContexts(relativePath: string): string[] {
+    const fileId = generateFileId(relativePath);
+    const metadata = this.store.files[fileId];
+    return metadata?.suggestedContexts ?? [];
   }
 
   /**
