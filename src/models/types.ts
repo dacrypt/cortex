@@ -25,6 +25,7 @@ export interface FileMetadata {
   relativePath: string; // For reference
   tags: string[];
   contexts: string[]; // Projects, clients, cases, etc.
+  suggestedContexts?: string[]; // Suggested projects (not yet confirmed)
   type: string; // Inferred from extension (ts, pdf, md, etc.)
   notes?: string;
   created_at: number; // Unix timestamp

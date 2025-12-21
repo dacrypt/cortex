@@ -13,7 +13,7 @@ Just as iTunes organized music files by:
 - Year
 
 ...without moving the MP3 files from their original locations, Cortex organizes work files by:
-- **Context** (project, client, case)
+- **Project** (book, client, case)
 - **Tag** (status, category, priority)
 - **Type** (code, document, image)
 
@@ -25,7 +25,7 @@ Just as iTunes organized music files by:
 │  (TreeDataProviders - Virtual Hierarchies)  │
 │                                             │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐   │
-│  │ Context  │ │   Tag    │ │   Type   │   │
+│  │ Project  │ │   Tag    │ │   Type   │   │
 │  │   View   │ │   View   │ │   View   │   │
 │  └──────────┘ └──────────┘ └──────────┘   │
 └─────────────────────────────────────────────┘
@@ -38,7 +38,7 @@ Just as iTunes organized music files by:
 │                                             │
 │  SQLite Database (.cortex/index.sqlite)    │
 │  - Tags (many-to-many)                     │
-│  - Contexts (many-to-many)                 │
+│  - Projects (stored as contexts, many-to-many) │
 │  - Notes                                   │
 │  - Timestamps                              │
 └─────────────────────────────────────────────┘
@@ -115,7 +115,7 @@ Just as iTunes organized music files by:
 
 **Key Features**:
 - SQLite database for reliability
-- Normalized schema (file_metadata, file_tags, file_contexts)
+- Normalized schema (file_metadata, file_tags, file_contexts for projects)
 - Stable `file_id` via SHA-256 hash of relative path
 - Indexed for fast queries
 
@@ -128,7 +128,7 @@ Just as iTunes organized music files by:
 **Schema Design**:
 - **file_metadata**: Core file info (1:1)
 - **file_tags**: Many-to-many relationship
-- **file_contexts**: Many-to-many relationship
+- **file_contexts**: Many-to-many relationship for projects
 
 This allows:
 - A file to have multiple tags
@@ -152,7 +152,7 @@ This allows:
 
 **Three Providers**:
 
-#### ContextTreeProvider
+#### ContextTreeProvider (Project View)
 ```
 project-alpha (15 files)
 ├── design-doc.pdf
@@ -254,7 +254,7 @@ file_id = sha256("src/components/Button.tsx")
 
 ### Query Speed (SQLite)
 - **Get files by tag**: <1ms (indexed)
-- **Get files by context**: <1ms (indexed)
+- **Get files by project**: <1ms (indexed)
 - **Get all tags**: <1ms (DISTINCT with index)
 
 ### Memory Usage
@@ -387,7 +387,7 @@ db.exec(`SELECT * FROM files WHERE tag = '${userInput}'`);
 
 ### VS Code Workspace Search
 - **Pros**: Built-in, fast, content-aware
-- **Cons**: No persistent organization, no contexts
+- **Cons**: No persistent organization, no projects
 
 ### File Explorer Folders
 - **Pros**: Simple, visual, familiar
@@ -395,7 +395,7 @@ db.exec(`SELECT * FROM files WHERE tag = '${userInput}'`);
 
 ### External Tools (Notion, Obsidian)
 - **Pros**: Rich features, collaboration
-- **Cons**: Not integrated with code editor, context switching
+- **Cons**: Not integrated with code editor, project switching
 
 ### Cortex Advantages
 - **Integrated**: Lives in VS Code

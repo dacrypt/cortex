@@ -5,7 +5,7 @@ Real-world scenarios demonstrating how Cortex solves common file organization ch
 ## Scenario 1: Multi-Client Consulting Work
 
 ### Problem
-You're a consultant working on 3 client projects simultaneously. Files are scattered across different folders, and you need to quickly switch contexts.
+You're a consultant working on 3 client projects simultaneously. Files are scattered across different folders, and you need to quickly switch projects.
 
 ### Traditional Approach (Folder-Based)
 ```
@@ -28,14 +28,14 @@ workspace/
 
 ### Cortex Approach
 
-#### Step 1: Tag files by client context
+#### Step 1: Tag files by client project
 ```
 Open: src/shared/utils.ts
-Command: "Cortex: Assign context to current file"
+Command: "Cortex: Assign project to current file"
 Enter: "client-acme"
 
 Open: src/shared/utils.ts (again)
-Command: "Cortex: Assign context to current file"
+Command: "Cortex: Assign project to current file"
 Enter: "client-beta"
 ```
 
@@ -54,7 +54,7 @@ Enter: "urgent"
 
 #### Result: Three Views
 
-**By Context**:
+**By Project**:
 ```
 client-acme (12 files)
 ├── src/shared/utils.ts
@@ -90,9 +90,9 @@ pdf (8 files)
 ```
 
 ### Benefit
-- **No duplication**: `utils.ts` exists once, appears in multiple contexts
+- **No duplication**: `utils.ts` exists once, appears in multiple projects
 - **Cross-cutting views**: See all urgent items regardless of client
-- **Quick switching**: Click context to see only relevant files
+- **Quick switching**: Click project to see only relevant files
 
 ---
 
@@ -206,7 +206,7 @@ Tag chen-2023.pdf with "cited-in-chapter-3"
 
 #### Result
 
-**By Context**:
+**By Project**:
 ```
 thread-neural-nets (3 items)
 ├── papers/smith-2020.pdf
@@ -274,18 +274,18 @@ Command: "Cortex: Add tag to current file"
 Enter: "design-in-progress"
 ```
 
-#### Link designs to components via context
+#### Link designs to components via project
 ```
 Open: designs/homepage-v2.fig
-Command: "Cortex: Assign context to current file"
+Command: "Cortex: Assign project to current file"
 Enter: "homepage-redesign"
 
 Open: src/pages/Home.tsx
-Command: "Cortex: Assign context to current file"
+Command: "Cortex: Assign project to current file"
 Enter: "homepage-redesign"
 
 Open: src/components/Hero.tsx
-Command: "Cortex: Assign context to current file"
+Command: "Cortex: Assign project to current file"
 Enter: "homepage-redesign"
 ```
 
@@ -303,7 +303,7 @@ design-in-progress (1 file)
 └── src/components/Form.tsx
 ```
 
-**By Context (Project)**:
+**By Project**:
 ```
 homepage-redesign (3 files)
 ├── designs/homepage-v2.fig
@@ -325,7 +325,7 @@ homepage-redesign (3 files)
 
 ### Cortex Approach
 
-#### One context per client
+#### One project per client
 ```
 Context: "gig-startup-x"
 Context: "gig-agency-y"
@@ -343,7 +343,7 @@ Tag files with "invoiced"
 
 #### Result
 
-**By Context**:
+**By Project**:
 ```
 gig-startup-x (12 files)
 ├── projects/startup-x/code/...
@@ -438,7 +438,7 @@ Track document/code maturity.
 1. **Start small**: Tag 5-10 files, see how it feels
 2. **Use consistent naming**: `project-x`, not `projectX` or `Project X`
 3. **Don't over-tag**: 2-3 tags per file is usually enough
-4. **Use contexts for "what"**: What project/client/domain
+4. **Use projects for "what"**: What project/client/domain
 5. **Use tags for "why"**: Why you care (urgent, review, learning)
 6. **Rebuild periodically**: If index feels stale, rebuild
 
@@ -455,12 +455,12 @@ Track document/code maturity.
 - Link to issue trackers (Jira, GitHub Issues)
 
 ### With Teams
-- Commit `.cortex/` to Git for shared contexts
+- Commit `.cortex/` to Git for shared projects
 - Team conventions: `@person-name` for ownership tags
 
 ### With Time
 - Auto-tag based on modification time
-- Archive contexts older than X months
+- Archive projects older than X months
 
 ---
 

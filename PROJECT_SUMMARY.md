@@ -2,7 +2,7 @@
 
 ## Executive Overview
 
-**Cortex** is a VS Code extension that provides a semantic organization layer over your workspace files. It allows you to organize files by contexts, tags, and types without moving them from their physical locations.
+**Cortex** is a VS Code extension that provides a semantic organization layer over your workspace files. It allows you to organize files by projects, tags, and types without moving them from their physical locations.
 
 ### Core Concept
 
@@ -23,12 +23,12 @@ cortex/
 │   │   ├── IndexStore.ts         ✅ In-memory file index
 │   │   └── MetadataStore.ts      ✅ SQLite persistence
 │   ├── views/
-│   │   ├── ContextTreeProvider.ts ✅ "By Context" view
+│   │   ├── ContextTreeProvider.ts ✅ "By Project" view
 │   │   ├── TagTreeProvider.ts     ✅ "By Tag" view
 │   │   └── TypeTreeProvider.ts    ✅ "By Type" view
 │   ├── commands/
 │   │   ├── addTag.ts              ✅ Tag current file
-│   │   ├── assignContext.ts       ✅ Assign context
+│   │   ├── assignContext.ts       ✅ Assign project (stored as context)
 │   │   ├── openView.ts            ✅ Focus Cortex sidebar
 │   │   └── rebuildIndex.ts        ✅ Rescan workspace
 │   ├── models/
@@ -64,19 +64,19 @@ cortex/
 
 #### ✅ Metadata Storage
 - SQLite database (`.cortex/index.sqlite`)
-- Normalized schema (file_metadata, file_tags, file_contexts)
+- Normalized schema (file_metadata, file_tags, file_contexts for projects)
 - Stable file IDs via SHA-256 hash
-- Many-to-many relationships for tags and contexts
+- Many-to-many relationships for tags and projects
 
 #### ✅ Virtual Tree Views
-- **By Context**: Group files by projects, clients, cases
+- **By Project**: Group files by projects, clients, cases
 - **By Tag**: Filter files by tags (urgent, review, etc.)
 - **By Type**: Browse by file type (typescript, pdf, markdown)
 - All views live in Activity Bar under "Cortex" icon
 
 #### ✅ Commands
 1. **Cortex: Add tag to current file** - Tag active file
-2. **Cortex: Assign context to current file** - Add to context
+2. **Cortex: Assign project to current file** - Add to project
 3. **Cortex: Open Cortex View** - Focus sidebar
 4. **Cortex: Rebuild Index** - Rescan workspace
 
@@ -89,12 +89,12 @@ cortex/
 ```
 ┌─────────────────────────────────┐
 │  VIEW LAYER                     │  TreeDataProviders
-│  (Virtual hierarchies)          │  (Context, Tag, Type)
+│  (Virtual hierarchies)          │  (Project, Tag, Type)
 └─────────────────────────────────┘
               ↓ queries
 ┌─────────────────────────────────┐
 │  METADATA LAYER                 │  SQLite database
-│  (User semantics)               │  (Tags, contexts, notes)
+│  (User semantics)               │  (Tags, projects, notes)
 └─────────────────────────────────┘
               ↓ references
 ┌─────────────────────────────────┐
@@ -137,7 +137,7 @@ cortex/
   file_id: string;           // SHA-256 hash
   relativePath: string;
   tags: string[];            // ["urgent", "review"]
-  contexts: string[];        // ["project-alpha", "client-acme"]
+  contexts: string[];        // Projects (stored as contexts)
   type: string;              // "typescript", "pdf", etc.
   notes?: string;
   created_at: number;
@@ -166,11 +166,11 @@ cortex/
 1. Open file: src/auth/login.ts
 2. Command Palette → "Cortex: Add tag to current file"
 3. Enter "needs-review"
-4. Command Palette → "Cortex: Assign context to current file"
+4. Command Palette → "Cortex: Assign project to current file"
 5. Enter "auth-refactor"
 6. Click Cortex icon in Activity Bar
 7. Expand "needs-review" tag → see login.ts
-8. Expand "auth-refactor" context → see login.ts
+8. Expand "auth-refactor" project → see login.ts
 9. Click file in view → opens in editor
 ```
 
@@ -285,7 +285,7 @@ UI updates
 - [x] Three views render correctly
 - [x] Commands appear in Command Palette
 - [x] Add tag command works
-- [x] Assign context command works
+- [x] Assign project command works
 - [x] Rebuild index command works
 - [x] Files clickable in views
 - [x] File watcher updates index
@@ -359,7 +359,7 @@ UI updates
 ### User adoption goals:
 - Users can organize 100+ files in <10 minutes
 - 80% of users understand core concept immediately
-- Tags/contexts provide clear value over folders alone
+- Tags/projects provide clear value over folders alone
 
 ---
 
@@ -389,11 +389,11 @@ UI updates
 - FileScanner.ts (130 lines) - Workspace scanning
 - IndexStore.ts (140 lines) - In-memory index
 - MetadataStore.ts (400 lines) - SQLite operations
-- ContextTreeProvider.ts (130 lines) - Context view
+- ContextTreeProvider.ts (130 lines) - Project view
 - TagTreeProvider.ts (110 lines) - Tag view
 - TypeTreeProvider.ts (110 lines) - Type view
 - addTag.ts (80 lines) - Add tag command
-- assignContext.ts (80 lines) - Assign context command
+- assignContext.ts (80 lines) - Assign project command
 - openView.ts (10 lines) - Open view command
 - rebuildIndex.ts (60 lines) - Rebuild index command
 - types.ts (50 lines) - Type definitions
@@ -448,14 +448,14 @@ UI updates
 ### Q: Why separate IndexStore and MetadataStore?
 **A**: IndexStore = fast, disposable, workspace state. MetadataStore = persistent, user-defined semantics. Clear separation of concerns.
 
-### Q: Can files have multiple tags/contexts?
+### Q: Can files have multiple tags/projects?
 **A**: Yes! That's the core value proposition. One file can be in `project-alpha`, `client-acme`, and tagged `urgent` + `review` simultaneously.
 
 ### Q: How does this differ from workspace search?
-**A**: Search finds files by content. Cortex organizes by user-defined semantics (contexts, tags). Complementary, not competitive.
+**A**: Search finds files by content. Cortex organizes by user-defined semantics (projects, tags). Complementary, not competitive.
 
 ### Q: Is metadata committed to Git?
-**A**: Optional. `.cortex/` is gitignored by default. Teams can choose to commit it for shared contexts.
+**A**: Optional. `.cortex/` is gitignored by default. Teams can choose to commit it for shared projects.
 
 ---
 

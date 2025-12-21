@@ -1,5 +1,5 @@
 /**
- * ContextTreeProvider - Provides virtual tree view grouped by contexts
+ * ContextTreeProvider - Provides virtual tree view grouped by projects
  */
 
 import * as vscode from 'vscode';
@@ -10,7 +10,7 @@ import { IndexingStatus, formatIndexingMessage } from '../core/IndexingStatus';
 import { TreeAccordionState } from './TreeAccordionState';
 
 /**
- * Tree item for context view
+ * Tree item for project view
  */
 class ContextTreeItem extends vscode.TreeItem {
   constructor(
@@ -34,7 +34,7 @@ class ContextTreeItem extends vscode.TreeItem {
       this.iconPath = vscode.ThemeIcon.File;
       this.contextValue = 'cortex-file';
     } else {
-      // Context item - folder icon
+      // Project item - folder icon
       this.iconPath = vscode.ThemeIcon.Folder;
       this.contextValue = 'cortex-context';
     }
@@ -42,7 +42,7 @@ class ContextTreeItem extends vscode.TreeItem {
 }
 
 /**
- * TreeDataProvider for Context view
+ * TreeDataProvider for Project view
  */
 export class ContextTreeProvider
   implements vscode.TreeDataProvider<ContextTreeItem>
@@ -106,10 +106,10 @@ export class ContextTreeProvider
    */
   async getChildren(element?: ContextTreeItem): Promise<ContextTreeItem[]> {
     if (!element) {
-      // Root level - show all contexts
+      // Root level - show all projects
       return this.getContextNodes();
     } else if (element.contextName) {
-      // Context level - show files in this context
+      // Project level - show files in this project
       return this.getFilesInContext(element.contextName);
     } else {
       return [];
@@ -117,7 +117,7 @@ export class ContextTreeProvider
   }
 
   /**
-   * Get all context nodes
+   * Get all project nodes
    */
   private getContextNodes(): ContextTreeItem[] {
     const contexts = this.metadataStore.getAllContexts();
@@ -126,13 +126,14 @@ export class ContextTreeProvider
       if (this.indexingStatus?.isIndexing) {
         return [this.getIndexingPlaceholder()];
       }
-      // Show placeholder when no contexts exist
+      // Show placeholder when no projects exist
       const placeholder = new ContextTreeItem(
-        'No contexts yet',
+        'No projects yet',
         vscode.TreeItemCollapsibleState.None
       );
       placeholder.iconPath = new vscode.ThemeIcon('info');
-      placeholder.tooltip = 'Use "Cortex: Assign context to current file" to create contexts';
+      placeholder.tooltip =
+        'Use "Cortex: Assign project to current file" to create projects';
       return [placeholder];
     }
 
@@ -155,7 +156,7 @@ export class ContextTreeProvider
   }
 
   /**
-   * Get files in a specific context
+   * Get files in a specific project
    */
   private getFilesInContext(context: string): ContextTreeItem[] {
     const relativePaths = this.metadataStore.getFilesByContext(context);

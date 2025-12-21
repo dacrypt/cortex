@@ -297,10 +297,10 @@ To publish to VS Code Marketplace:
 
 ## Next Steps
 
-1. **Add Test Suite**
-   - Unit tests for core components
-   - Integration tests for commands
-   - E2E tests with VS Code test runner
+1. **Expand Test Coverage**
+   - Add more fixtures for documents and images
+   - Extend command and view provider scenarios
+   - Consider E2E flows in Extension Development Host
 
 2. **Performance Testing**
    - Test with large workspaces (10k+ files)
