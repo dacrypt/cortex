@@ -93,10 +93,59 @@ export interface PDFMetadata extends DocumentMetadata {
 }
 
 export class DocumentDetector {
+  private static sofficeAvailable: boolean | null = null;
+  private static sofficeCheckPromise: Promise<boolean> | null = null;
+
+  /**
+   * Check if LibreOffice (soffice) is available
+   */
+  private static async checkSofficeAvailable(): Promise<boolean> {
+    // If already checked, return cached result
+    if (DocumentDetector.sofficeAvailable !== null) {
+      return DocumentDetector.sofficeAvailable;
+    }
+
+    // If check is in progress, wait for it
+    if (DocumentDetector.sofficeCheckPromise) {
+      return DocumentDetector.sofficeCheckPromise;
+    }
+
+    // Start new check
+    DocumentDetector.sofficeCheckPromise = (async () => {
+      try {
+        await execFileAsync('soffice', ['--version']);
+        DocumentDetector.sofficeAvailable = true;
+        return true;
+      } catch (error: any) {
+        if (error?.code === 'ENOENT') {
+          DocumentDetector.sofficeAvailable = false;
+          // Only log warning once when first detected as missing
+          console.warn(
+            '[DocumentDetector] LibreOffice (soffice) not found. Legacy Office metadata requires it. Install LibreOffice to extract metadata from .doc, .xls, and .ppt files.'
+          );
+        } else {
+          // Other errors might be temporary, so don't cache
+          return false;
+        }
+        return false;
+      } finally {
+        DocumentDetector.sofficeCheckPromise = null;
+      }
+    })();
+
+    return DocumentDetector.sofficeCheckPromise;
+  }
+
   private async convertLegacyOfficeFile(
     absolutePath: string,
     targetExtension: '.docx' | '.xlsx' | '.pptx'
   ): Promise<{ convertedPath: string; cleanup: () => Promise<void> } | null> {
+    // Check if soffice is available first (cached check)
+    const isAvailable = await DocumentDetector.checkSofficeAvailable();
+    if (!isAvailable) {
+      return null;
+    }
+
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cortex-convert-'));
     const cleanup = async () => {
       await fs.rm(tmpDir, { recursive: true, force: true });
@@ -120,16 +169,11 @@ export class DocumentDetector {
       await fs.access(convertedPath);
       return { convertedPath, cleanup };
     } catch (error: any) {
-      if (error?.code === 'ENOENT') {
-        console.warn(
-          '[DocumentDetector] LibreOffice (soffice) not found. Legacy Office metadata requires it.'
-        );
-      } else {
-        console.warn(
-          `[DocumentDetector] Legacy Office conversion failed for ${absolutePath}:`,
-          error
-        );
-      }
+      // If we get here, soffice was available but conversion failed
+      console.warn(
+        `[DocumentDetector] Legacy Office conversion failed for ${absolutePath}:`,
+        error
+      );
       await cleanup();
       return null;
     }

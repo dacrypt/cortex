@@ -65,6 +65,14 @@
         {
           "id": "cortex-issuesView",
           "name": "Issues"
+        },
+        {
+          "id": "cortex-fileInfoView",
+          "name": "File Info"
+        },
+        {
+          "id": "cortex-categoryView",
+          "name": "Biblioteca"
         }
       ]
     },
@@ -123,6 +131,18 @@
         "command": "cortex.generateSummaryAI",
         "title": "Cortex: Generate File Summary (AI)",
         "icon": "$(sparkle)"
+      },
+      {
+        "command": "vscode.open",
+        "title": "Open"
+      },
+      {
+        "command": "explorer.openToSide",
+        "title": "Open to the Side"
+      },
+      {
+        "command": "explorer.openWith",
+        "title": "Open With..."
       }
     ],
     "menus": {
@@ -184,23 +204,70 @@
         },
         {
           "command": "cortex.enableAccordion",
-          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && !cortex.accordionEnabled",
+          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView || view == cortex-categoryView) && !cortex.accordionEnabled",
           "group": "navigation"
         },
         {
           "command": "cortex.disableAccordion",
-          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && cortex.accordionEnabled",
+          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView || view == cortex-categoryView) && cortex.accordionEnabled",
           "group": "navigation"
         },
         {
           "command": "cortex.expandAll",
-          "when": "view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView",
+          "when": "view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView || view == cortex-categoryView",
           "group": "navigation"
         },
         {
           "command": "cortex.collapseAll",
-          "when": "view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView",
+          "when": "view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView || view == cortex-categoryView",
           "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "vscode.open",
+          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && viewItem == cortex-file",
+          "group": "navigation"
+        },
+        {
+          "command": "explorer.openToSide",
+          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && viewItem == cortex-file",
+          "group": "navigation"
+        },
+        {
+          "command": "explorer.openWith",
+          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && viewItem == cortex-file",
+          "group": "navigation"
+        },
+        {
+          "command": "revealInExplorer",
+          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && viewItem == cortex-file",
+          "group": "navigation"
+        },
+        {
+          "command": "revealFileInOS",
+          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && viewItem == cortex-file",
+          "group": "navigation"
+        },
+        {
+          "command": "copyPath",
+          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && viewItem == cortex-file",
+          "group": "8_clipboard"
+        },
+        {
+          "command": "copyRelativePath",
+          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && viewItem == cortex-file",
+          "group": "8_clipboard"
+        },
+        {
+          "command": "workbench.files.action.renameFile",
+          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && viewItem == cortex-file",
+          "group": "9_modification"
+        },
+        {
+          "command": "workbench.files.action.deleteFile",
+          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && viewItem == cortex-file",
+          "group": "9_modification"
         }
       ]
     },
@@ -259,6 +326,70 @@
           "minimum": 500,
           "maximum": 10000,
           "description": "Maximum number of characters to send as context to the LLM."
+        },
+        "cortex.llm.autoSummary.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically generate and cache AI summaries during indexing."
+        },
+        "cortex.llm.autoSummary.maxFileSize": {
+          "type": "number",
+          "default": 250000,
+          "minimum": 1000,
+          "description": "Maximum file size (bytes) to summarize during automatic indexing."
+        },
+        "cortex.llm.autoSummary.maxConcurrency": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 8,
+          "description": "Maximum concurrent AI summary requests during indexing."
+        },
+        "cortex.llm.autoIndex.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically generate AI tags and project suggestions during indexing."
+        },
+        "cortex.llm.autoIndex.applyTags": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically apply AI-suggested tags during indexing."
+        },
+        "cortex.llm.autoIndex.applyProjects": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically apply AI project suggestions during indexing."
+        },
+        "cortex.llm.autoIndex.useSuggestedContexts": {
+          "type": "boolean",
+          "default": true,
+          "description": "Store AI project suggestions as suggested contexts instead of assigning."
+        },
+        "cortex.llm.autoIndex.maxFileSize": {
+          "type": "number",
+          "default": 250000,
+          "minimum": 1000,
+          "description": "Maximum file size (bytes) to process for AI tags/projects."
+        },
+        "cortex.llm.autoIndex.maxConcurrency": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 8,
+          "description": "Maximum concurrent AI tag/project requests during indexing."
+        },
+        "cortex.mirror.maxConcurrency": {
+          "type": "number",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 4,
+          "description": "Maximum concurrent document mirror jobs to limit memory usage."
+        },
+        "cortex.mirror.maxFileSizeMB": {
+          "type": "number",
+          "default": 25,
+          "minimum": 1,
+          "description": "Maximum file size (MB) eligible for mirror generation."
         }
       }
     }
@@ -272,16 +403,19 @@
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
+    "@electron/rebuild": "^3.7.2",
     "@eslint/js": "^9.39.2",
     "@types/adm-zip": "^0.5.7",
     "@types/better-sqlite3": "^7.6.9",
     "@types/glob": "^7.2.0",
     "@types/mocha": "^10.0.6",
     "@types/node": "^20.11.0",
+    "@types/pdf-parse": "^1.1.5",
     "@types/vscode": "^1.80.0",
-    "@vscode/test-electron": "^2.5.2",
     "@typescript-eslint/eslint-plugin": "^8.50.0",
     "@typescript-eslint/parser": "^8.50.0",
+    "@vscode/test-electron": "^2.5.2",
+    "electron-rebuild": "^3.2.9",
     "eslint": "^9.39.2",
     "glob": "^7.2.3",
     "mocha": "^10.7.3",
@@ -290,6 +424,8 @@
   },
   "dependencies": {
     "adm-zip": "^0.5.16",
-    "better-sqlite3": "^9.3.0"
+    "better-sqlite3": "^12.5.0",
+    "pdf-parse": "^2.4.5",
+    "xlsx": "^0.18.5"
   }
 }

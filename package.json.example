@@ -1,0 +1,30 @@
+{
+  "name": "cortex",
+  "displayName": "Cortex",
+  "description": "Semantic cognition layer for your workspace - organize files by projects, tags, and types",
+  "version": "0.1.0",
+  "publisher": "your-publisher-name",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  
+  // ⚠️ IMPORTANTE: Agrega esta sección para incluir binarios Go
+  "files": [
+    "out",
+    "resources",
+    "bin/**/*"  // ← Esto incluye todos los binarios Go
+  ],
+  
+  "contributes": {
+    // ... resto de la configuración ...
+  }
+}
+
+

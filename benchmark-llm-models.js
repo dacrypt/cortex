@@ -5,6 +5,8 @@
  */
 
 const ENDPOINT = 'http://localhost:11434';
+const fs = require('fs');
+const path = require('path');
 
 // Models to benchmark (ordered from smallest to largest)
 const MODELS_TO_TEST = [
@@ -12,6 +14,9 @@ const MODELS_TO_TEST = [
   { name: 'llama3.2', size: '2GB', params: '3.2B', description: 'Balanced, recommended' },
   { name: 'mistral', size: '4.1GB', params: '7B', description: 'High quality, medium speed' },
   { name: 'codellama', size: '3.8GB', params: '7B', description: 'Optimized for code' },
+  { name: 'qwen2.5', size: '?', params: '7B', description: 'Strong instruction following' },
+  { name: 'llama3.1', size: '?', params: '8B', description: 'Larger Llama baseline' },
+  { name: 'deepseek-coder', size: '?', params: '7B', description: 'Code-focused model' },
 ];
 
 // Test prompts (representing real Cortex use cases)
@@ -33,6 +38,17 @@ export class AuthService {
 
 Return ONLY a JSON array of lowercase tag strings.
 Example: ["typescript", "authentication", "api"]`,
+    expectedType: 'json_array'
+  },
+
+  strictJsonTags: {
+    name: 'Strict JSON Tags',
+    prompt: `Return ONLY a JSON array of 4 lowercase tags for this module:
+
+Module: src/crypto/jwt.ts
+Purpose: JWT signing, verification, token expiration, and refresh logic.
+
+Response format: ["tag-one", "tag-two", "tag-three", "tag-four"]`,
     expectedType: 'json_array'
   },
 
@@ -58,6 +74,34 @@ Content: React component that displays user profile information including avatar
 
 Return only the summary (max 100 characters).`,
     expectedType: 'string'
+  },
+
+  streamSummary: {
+    name: 'Stream Summary',
+    prompt: `Summarize this file in one sentence (max 90 chars):
+
+File: src/services/TagService.ts
+Content: Service that computes AI-suggested tags, validates user selections, and persists them.`,
+    expectedType: 'string',
+    stream: true
+  },
+
+  longContextSummary: {
+    name: 'Long Context Summary',
+    prompt: `Summarize the file purpose in one sentence (max 120 chars).
+
+File: src/core/MetadataStore.ts
+Content: A TypeScript class that stores and retrieves metadata for files, supports
+tags, summaries, project assignment, and provides a query API for filtering based
+on tags, projects, timestamps, and file paths. It persists data to disk, handles
+migrations, and exposes methods for importing/exporting metadata for backups.
+
+Additional Context:
+- Uses a JSON file as the backing store
+- Supports optimistic updates and caching
+- Ensures backward compatibility across versions
+- Provides helper functions for fuzzy tag search and batch updates`,
+    expectedType: 'string'
   }
 };
 
@@ -74,6 +118,27 @@ const colors = {
 
 function log(message, color = 'reset') {
   console.log(`${colors[color]}${message}${colors.reset}`);
+}
+
+function isJsonArray(text) {
+  try {
+    const trimmed = text.trim();
+    const parsed = JSON.parse(trimmed);
+    return Array.isArray(parsed) && parsed.every(item => typeof item === 'string');
+  } catch {
+    return false;
+  }
+}
+
+function isSingleLineString(text) {
+  const trimmed = text.trim();
+  return trimmed.length > 0 && !trimmed.includes('\n');
+}
+
+function scoreCompliance(expectedType, response) {
+  if (expectedType === 'json_array') return isJsonArray(response) ? 1 : 0;
+  if (expectedType === 'string') return isSingleLineString(response) ? 1 : 0;
+  return 0;
 }
 
 async function checkOllama() {
@@ -132,17 +197,44 @@ async function pullModel(modelName) {
   log(`   ✅ ${modelName} downloaded`, 'green');
 }
 
-async function benchmarkModel(modelName, prompt, promptName) {
+async function benchmarkModel(modelName, prompt, promptName, stream = false) {
   const startTime = Date.now();
 
   try {
+    if (!stream) {
+      const response = await fetch(`${ENDPOINT}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: modelName,
+          prompt: prompt,
+          stream: false,
+          options: {
+            temperature: 0.3,
+            num_predict: 200
+          }
+        })
+      });
+
+      const data = await response.json();
+      const endTime = Date.now();
+      const duration = (endTime - startTime) / 1000; // seconds
+
+      return {
+        success: true,
+        response: data.response,
+        duration: duration.toFixed(2),
+        tokensPerSecond: (data.eval_count / (data.eval_duration / 1000000000)).toFixed(1)
+      };
+    }
+
     const response = await fetch(`${ENDPOINT}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: modelName,
         prompt: prompt,
-        stream: false,
+        stream: true,
         options: {
           temperature: 0.3,
           num_predict: 200
@@ -150,15 +242,48 @@ async function benchmarkModel(modelName, prompt, promptName) {
       })
     });
 
-    const data = await response.json();
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let firstTokenMs = null;
+    let combined = '';
+    let evalCount = 0;
+    let evalDuration = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      if (firstTokenMs === null) {
+        firstTokenMs = Date.now() - startTime;
+      }
+
+      const text = decoder.decode(value);
+      const lines = text.split('\n').filter(l => l.trim());
+
+      for (const line of lines) {
+        try {
+          const data = JSON.parse(line);
+          if (data.response) combined += data.response;
+          if (typeof data.eval_count === 'number') evalCount = data.eval_count;
+          if (typeof data.eval_duration === 'number') evalDuration = data.eval_duration;
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+    }
+
     const endTime = Date.now();
     const duration = (endTime - startTime) / 1000; // seconds
+    const tokensPerSecond = evalDuration
+      ? (evalCount / (evalDuration / 1000000000)).toFixed(1)
+      : '0.0';
 
     return {
       success: true,
-      response: data.response,
+      response: combined,
       duration: duration.toFixed(2),
-      tokensPerSecond: (data.eval_count / (data.eval_duration / 1000000000)).toFixed(1)
+      tokensPerSecond,
+      firstTokenMs: firstTokenMs === null ? 'n/a' : firstTokenMs
     };
   } catch (error) {
     const endTime = Date.now();
@@ -220,11 +345,17 @@ async function runBenchmark() {
     for (const [testKey, testData] of Object.entries(TEST_PROMPTS)) {
       process.stdout.write(`   Testing ${testData.name}... `);
 
-      const result = await benchmarkModel(model.name, testData.prompt, testData.name);
+      const result = await benchmarkModel(
+        model.name,
+        testData.prompt,
+        testData.name,
+        Boolean(testData.stream)
+      );
       results[model.name].tests[testKey] = result;
 
       if (result.success) {
-        log(`✅ ${result.duration}s (${result.tokensPerSecond} tok/s)`, 'green');
+        const streamNote = result.firstTokenMs !== undefined ? ` | first token ${result.firstTokenMs}ms` : '';
+        log(`✅ ${result.duration}s (${result.tokensPerSecond} tok/s)${streamNote}`, 'green');
         log(`   Response: ${result.response.substring(0, 80)}${result.response.length > 80 ? '...' : ''}`, 'reset');
       } else {
         log(`❌ Failed: ${result.error}`, 'red');
@@ -241,9 +372,9 @@ async function runBenchmark() {
   console.log('');
 
   // Summary table
-  console.log('┌─────────────┬──────────┬────────────┬──────────────┬─────────────┐');
-  console.log('│ Model       │ Size     │ Avg Time   │ Tokens/sec   │ Quality     │');
-  console.log('├─────────────┼──────────┼────────────┼──────────────┼─────────────┤');
+  console.log('┌─────────────┬──────────┬────────────┬──────────────┬─────────────┬──────────────┐');
+  console.log('│ Model       │ Size     │ Avg Time   │ Tokens/sec   │ Quality     │ Compliance   │');
+  console.log('├─────────────┼──────────┼────────────┼──────────────┼─────────────┼──────────────┤');
 
   const modelStats = [];
 
@@ -254,12 +385,19 @@ async function runBenchmark() {
     const successfulTests = Object.values(modelResults.tests).filter(t => t.success);
 
     if (successfulTests.length === 0) {
-      console.log(`│ ${model.name.padEnd(11)} │ ${model.size.padEnd(8)} │ Failed     │ -            │ -           │`);
+      console.log(`│ ${model.name.padEnd(11)} │ ${model.size.padEnd(8)} │ Failed     │ -            │ -           │ -            │`);
       continue;
     }
 
     const avgTime = (successfulTests.reduce((sum, t) => sum + parseFloat(t.duration), 0) / successfulTests.length).toFixed(2);
     const avgTokens = (successfulTests.reduce((sum, t) => sum + parseFloat(t.tokensPerSecond), 0) / successfulTests.length).toFixed(1);
+
+    const complianceScores = Object.entries(modelResults.tests).map(([testKey, testResult]) => {
+      if (!testResult.success) return 0;
+      const expectedType = TEST_PROMPTS[testKey].expectedType;
+      return scoreCompliance(expectedType, testResult.response);
+    });
+    const compliancePct = Math.round((complianceScores.reduce((sum, s) => sum + s, 0) / complianceScores.length) * 100);
 
     // Quality assessment (simple heuristic based on response length and content)
     let qualityScore = 0;
@@ -269,18 +407,19 @@ async function runBenchmark() {
     });
     const quality = qualityScore >= 4 ? 'Excellent' : qualityScore >= 2 ? 'Good' : 'Fair';
 
-    console.log(`│ ${model.name.padEnd(11)} │ ${model.size.padEnd(8)} │ ${avgTime.padEnd(10)} │ ${avgTokens.padEnd(12)} │ ${quality.padEnd(11)} │`);
+    console.log(`│ ${model.name.padEnd(11)} │ ${model.size.padEnd(8)} │ ${avgTime.padEnd(10)} │ ${avgTokens.padEnd(12)} │ ${quality.padEnd(11)} │ ${String(compliancePct).padEnd(12)} │`);
 
     modelStats.push({
       name: model.name,
       avgTime: parseFloat(avgTime),
       avgTokens: parseFloat(avgTokens),
       quality,
-      size: model.size
+      size: model.size,
+      compliancePct
     });
   }
 
-  console.log('└─────────────┴──────────┴────────────┴──────────────┴─────────────┘');
+  console.log('└─────────────┴──────────┴────────────┴──────────────┴─────────────┴──────────────┘');
   console.log('');
 
   // Recommendations
@@ -325,6 +464,25 @@ async function runBenchmark() {
 
   log('✅ Benchmark complete!', 'green');
   console.log('');
+
+  const timestamp = new Date().toISOString().replace(/[:]/g, '').replace(/\..+/, '').replace('T', '_');
+  const outputDir = path.join(process.cwd(), 'benchmarks');
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  const jsonPath = path.join(outputDir, `benchmark-results-${timestamp}.json`);
+  fs.writeFileSync(jsonPath, JSON.stringify({ timestamp, results }, null, 2));
+
+  const csvPath = path.join(outputDir, `benchmark-results-${timestamp}.csv`);
+  const csvRows = [
+    ['model', 'size', 'avg_time_s', 'tokens_per_sec', 'quality', 'compliance_pct'].join(',')
+  ];
+  modelStats.forEach(stat => {
+    csvRows.push([stat.name, stat.size, stat.avgTime, stat.avgTokens, stat.quality, stat.compliancePct].join(','));
+  });
+  fs.writeFileSync(csvPath, `${csvRows.join('\n')}\n`);
+
+  log(`📄 JSON report saved: ${jsonPath}`, 'cyan');
+  log(`📄 CSV report saved: ${csvPath}`, 'cyan');
 }
 
 runBenchmark().catch(error => {
