@@ -6,6 +6,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { IMetadataStore } from '../core/IMetadataStore';
 import { IndexStore } from '../core/IndexStore';
+import { normalizeTag } from '../utils/osTags';
+import { addTagWithOsSync } from '../utils/tagSync';
 
 export async function addTagCommand(
   workspaceRoot: string,
@@ -61,15 +63,29 @@ export async function addTagCommand(
     return; // User cancelled
   }
 
-  const normalizedTag = tag.trim().toLowerCase();
+  const normalizedTag = normalizeTag(tag);
+  if (!normalizedTag) {
+    return;
+  }
 
   // Add tag
-  metadataStore.addTag(relativePath, normalizedTag);
+  const osError = await addTagWithOsSync(
+    metadataStore,
+    relativePath,
+    absolutePath,
+    normalizedTag
+  );
 
   // Refresh views
   onMetadataChanged();
 
-  vscode.window.showInformationMessage(
-    `Added tag "${normalizedTag}" to ${fileEntry.filename}`
-  );
+  if (osError) {
+    vscode.window.showWarningMessage(
+      `Added tag "${normalizedTag}" to ${fileEntry.filename}, but failed to sync OS tags: ${osError.message}`
+    );
+  } else {
+    vscode.window.showInformationMessage(
+      `Added tag "${normalizedTag}" to ${fileEntry.filename}`
+    );
+  }
 }

@@ -15,5 +15,9 @@
     "dist": true,
     "**/node_modules": true
   },
-  "typescript.tsc.autoDetect": "on"
+  "typescript.tsc.autoDetect": "on",
+  "cortex.llm.enabled": true,
+  "cortex.llm.endpoint": "http://localhost:11434",
+  "cortex.llm.model": "llama3.2",
+  "cortex.llm.maxContextTokens": 2000
 }

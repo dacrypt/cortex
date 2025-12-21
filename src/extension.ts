@@ -15,6 +15,10 @@ import { IndexCache } from "./core/IndexCache";
 import { FileIndexEntry } from "./models/types";
 import { BlacklistStore } from "./core/BlacklistStore";
 import { WorkerPool } from "./core/WorkerPool";
+import { ProjectAutoAssigner } from "./core/ProjectAutoAssigner";
+import { isOsTaggingSupported } from "./utils/osTags";
+import { syncStoreTagsFromOs } from "./utils/tagSync";
+import { LLMService } from "./services/LLMService";
 
 // View providers
 import { ContextTreeProvider } from "./views/ContextTreeProvider";
@@ -37,6 +41,9 @@ import { addTagCommand } from "./commands/addTag";
 import { assignContextCommand } from "./commands/assignContext";
 import { openViewCommand } from "./commands/openView";
 import { rebuildIndexCommand } from "./commands/rebuildIndex";
+import { suggestTagsAI } from "./commands/suggestTagsAI";
+import { suggestProjectAI } from "./commands/suggestProjectAI";
+import { generateSummaryAI } from "./commands/generateSummaryAI";
 
 type IndexerTask = {
   type: "basic" | "mime" | "code" | "document";
@@ -56,6 +63,42 @@ type AccordionTreeProviderAny = {
   handleDidExpand(element: unknown): void;
   handleDidCollapse(element: unknown): void;
 };
+
+async function syncOsTagsForFiles(
+  files: FileIndexEntry[],
+  metadataStore: MetadataStore,
+  onMetadataChanged: () => void
+): Promise<void> {
+  if (!isOsTaggingSupported()) {
+    return;
+  }
+
+  const batchSize = 50;
+  for (let i = 0; i < files.length; i += batchSize) {
+    const batch = files.slice(i, i + batchSize);
+    const results = await Promise.all(
+      batch.map(async (file) => {
+        try {
+          return await syncStoreTagsFromOs(
+            metadataStore,
+            file.relativePath,
+            file.absolutePath
+          );
+        } catch (error) {
+          console.warn(
+            `[Cortex] Failed to sync OS tags for ${file.relativePath}:`,
+            error
+          );
+          return false;
+        }
+      })
+    );
+
+    if (results.some(Boolean)) {
+      onMetadataChanged();
+    }
+  }
+}
 
 /**
  * Background indexing for basic metadata (stats, folder, language)
@@ -750,6 +793,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const metadataStore = new MetadataStore(workspaceRoot);
   const metadataExtractor = new MetadataExtractor(workspaceRoot);
   const indexCache = new IndexCache(workspaceRoot);
+  const llmService = new LLMService();
   let cachedEntries: FileIndexEntry[] = [];
   let changedFiles: FileIndexEntry[] = [];
   const scanStatus: IndexingStatus = {
@@ -1180,6 +1224,22 @@ export async function activate(context: vscode.ExtensionContext) {
         provider.collapseAll();
       }
     ),
+
+    // AI-powered commands
+    vscode.commands.registerCommand("cortex.suggestTagsAI", () =>
+      suggestTagsAI(llmService, metadataStore, workspaceRoot)
+    ),
+
+    vscode.commands.registerCommand("cortex.suggestProjectAI", () =>
+      suggestProjectAI(llmService, metadataStore, workspaceRoot)
+    ),
+
+    vscode.commands.registerCommand("cortex.generateSummaryAI", () =>
+      generateSummaryAI(llmService, metadataStore, workspaceRoot)
+    ),
+
+    // Refresh views command (used by AI commands)
+    vscode.commands.registerCommand("cortex.refreshViews", refreshAllViews),
   ];
 
   // Register disposables
@@ -1223,6 +1283,24 @@ export async function activate(context: vscode.ExtensionContext) {
         fileEntry.relativePath,
         fileEntry.extension
       );
+      if (isOsTaggingSupported()) {
+        void syncStoreTagsFromOs(
+          metadataStore,
+          fileEntry.relativePath,
+          fileEntry.absolutePath
+        )
+          .then((changed) => {
+            if (changed) {
+              refreshAllViews();
+            }
+          })
+          .catch((error) => {
+            console.warn(
+              `[Cortex] Failed to sync OS tags for ${fileEntry.relativePath}:`,
+              error
+            );
+          });
+      }
       refreshAllViews();
       scheduleCacheSave();
     }
@@ -1355,6 +1433,15 @@ export async function activate(context: vscode.ExtensionContext) {
       });
       refreshAllViews();
       scheduleCacheSave();
+      if (isOsTaggingSupported()) {
+        void syncOsTagsForFiles(
+          files.filter(
+            (file) => !blacklistStore.isBlacklisted(file.relativePath)
+          ),
+          metadataStore,
+          refreshAllViews
+        );
+      }
 
       // Phase 2: Independent background indexing - each runs separately with progress
       console.log("[Cortex] Starting independent background indexers...");
@@ -1454,6 +1541,55 @@ export async function activate(context: vscode.ExtensionContext) {
         basicPool,
         workspaceRoot
       );
+
+      const projectAutoAssignConfig = vscode.workspace.getConfiguration(
+        "cortex.projectAutoAssign"
+      );
+      const autoAssignEnabled = projectAutoAssignConfig.get<boolean>(
+        "enabled",
+        true
+      );
+      if (autoAssignEnabled) {
+        const windowHours = projectAutoAssignConfig.get<number>(
+          "windowHours",
+          6
+        );
+        const minClusterSize = projectAutoAssignConfig.get<number>(
+          "minClusterSize",
+          2
+        );
+        const dominanceThreshold = projectAutoAssignConfig.get<number>(
+          "dominanceThreshold",
+          0.6
+        );
+        const suggestionThreshold = projectAutoAssignConfig.get<number>(
+          "suggestionThreshold",
+          0.3
+        );
+        const windowMs = Math.max(1, windowHours) * 60 * 60 * 1000;
+        const projectAutoAssigner = new ProjectAutoAssigner(
+          metadataStore,
+          indexStore,
+          {
+            windowMs,
+            minClusterSize: Math.max(1, minClusterSize),
+            dominanceThreshold: Math.min(Math.max(dominanceThreshold, 0), 1),
+            suggestionThreshold: Math.min(
+              Math.max(suggestionThreshold, 0),
+              1
+            ),
+          }
+        );
+        const assignmentResult = projectAutoAssigner.assignProjects(
+          indexStore.getAllFiles(),
+          (file) => blacklistStore.isBlacklisted(file.relativePath)
+        );
+        if (assignmentResult.assignedCount > 0) {
+          console.log(
+            `[Cortex] Auto-assigned ${assignmentResult.assignedCount} project links across ${assignmentResult.filesUpdated} files`
+          );
+        }
+      }
 
       // Refresh all views after basic metadata is ready
       refreshAllViews();
@@ -1556,7 +1692,7 @@ export async function activate(context: vscode.ExtensionContext) {
   if (!hasShownWelcome) {
     vscode.window
       .showInformationMessage(
-        "Cortex is ready! Start organizing your files with tags and contexts.",
+        "Cortex is ready! Start organizing your files with tags and projects.",
         "Open Cortex View",
         "Dismiss"
       )

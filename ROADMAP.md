@@ -10,8 +10,8 @@ Future enhancements for Cortex, organized by theme. All additions maintain the c
 
 - [x] Workspace indexing
 - [x] SQLite metadata storage
-- [x] Three virtual views (Context, Tag, Type)
-- [x] Four commands (add tag, assign context, open view, rebuild index)
+- [x] Three virtual views (Project, Tag, Type)
+- [x] Four commands (add tag, assign project, open view, rebuild index)
 - [x] File watcher for incremental updates
 - [x] Activity Bar integration
 
@@ -21,12 +21,12 @@ Future enhancements for Cortex, organized by theme. All additions maintain the c
 
 ### 2.1 Multi-Select Operations
 
-**Goal**: Tag/contextualize multiple files at once
+**Goal**: Tag/project-assign multiple files at once
 
 **Features**:
 - Select multiple files in File Explorer → Right-click → "Add Cortex Tag"
-- Bulk assign context to all files in a folder
-- Remove tags/contexts from multiple files
+- Bulk assign projects to all files in a folder
+- Remove tags/projects from multiple files
 
 **Implementation**:
 - Extend commands to accept URI arrays
@@ -38,12 +38,12 @@ Future enhancements for Cortex, organized by theme. All additions maintain the c
 
 ### 2.2 Quick Pick Suggestions
 
-**Goal**: Autocomplete for tags and contexts
+**Goal**: Autocomplete for tags and projects
 
 **Features**:
 - Show existing tags when adding a new tag (quick pick)
 - Recently used tags appear first
-- Same for contexts
+- Same for projects
 
 **Implementation**:
 - Replace `showInputBox` with `showQuickPick`
@@ -53,9 +53,9 @@ Future enhancements for Cortex, organized by theme. All additions maintain the c
 
 ---
 
-### 2.3 Inline Tag/Context Badges
+### 2.3 Inline Tag/Project Badges
 
-**Goal**: Show tags/contexts directly in File Explorer
+**Goal**: Show tags/projects directly in File Explorer
 
 **Features**:
 - File Explorer shows badges next to files (e.g., "📁 project-alpha" or "🏷️ urgent")
@@ -64,7 +64,7 @@ Future enhancements for Cortex, organized by theme. All additions maintain the c
 **Implementation**:
 - Use `FileDecorationProvider` API
 - Query metadata for visible files
-- Show first tag/context as suffix
+- Show first tag/project as suffix
 
 **Effort**: Medium (2-3 days)
 
@@ -75,7 +75,7 @@ Future enhancements for Cortex, organized by theme. All additions maintain the c
 **Goal**: Filter Cortex views by keyword
 
 **Features**:
-- Search box at top of Context/Tag/Type views
+- Search box at top of Project/Tag/Type views
 - Filter tree items by name
 - Fuzzy matching
 
@@ -149,7 +149,7 @@ Future enhancements for Cortex, organized by theme. All additions maintain the c
 **Features**:
 - Index file contents (SQLite FTS5)
 - Command: "Cortex: Search all files"
-- Results grouped by context/tag
+- Results grouped by project/tag
 
 **Implementation**:
 - Read file contents during indexing
@@ -198,7 +198,7 @@ Future enhancements for Cortex, organized by theme. All additions maintain the c
 
 ## Phase 5: Team Collaboration
 
-### 5.1 Shared Contexts (via Git)
+### 5.1 Shared Projects (via Git)
 
 **Goal**: Team shares `.cortex/` in version control
 
@@ -216,16 +216,16 @@ Future enhancements for Cortex, organized by theme. All additions maintain the c
 
 ---
 
-### 5.2 Context Templates
+### 5.2 Project Templates
 
-**Goal**: Predefined context structures for teams
+**Goal**: Predefined project structures for teams
 
 **Features**:
-- Template: "New client project" → creates contexts `client-x`, `client-x-dev`, `client-x-docs`
+- Template: "New client project" → creates projects `client-x`, `client-x-dev`, `client-x-docs`
 - Share templates via JSON files
 
 **Implementation**:
-- Settings: `cortex.contextTemplates`
+- Settings: `cortex.projectTemplates`
 - Command: "Cortex: Apply template"
 
 **Effort**: Small (1-2 days)
@@ -258,7 +258,7 @@ Future enhancements for Cortex, organized by theme. All additions maintain the c
 
 **Features**:
 - WebView panel showing graph
-- Nodes = files, edges = relationships (imports, "relates-to", same context)
+- Nodes = files, edges = relationships (imports, "relates-to", same project)
 - Interactive (click to open file)
 
 **Implementation**:
@@ -295,7 +295,7 @@ Future enhancements for Cortex, organized by theme. All additions maintain the c
 **Features**:
 - Group files by "Last modified"
 - Heatmap of activity
-- Filter by context/tag
+- Filter by project/tag
 
 **Implementation**:
 - Use `lastModified` from index
@@ -434,16 +434,16 @@ Future enhancements for Cortex, organized by theme. All additions maintain the c
 
 ---
 
-### 9.2 Smart Context Detection
+### 9.2 Smart Project Detection
 
-**Goal**: Suggest contexts based on imports/paths
+**Goal**: Suggest projects based on imports/paths
 
 **Features**:
-- "Files in `src/auth/` often belong to context 'authentication'"
+- "Files in `src/auth/` often belong to project 'authentication'"
 - Learn from user behavior
 
 **Implementation**:
-- Track patterns (path → context mappings)
+- Track patterns (path → project mappings)
 - Suggest when user adds files to new folders
 
 **Effort**: Large (3-4 weeks)
@@ -469,8 +469,8 @@ Ideas from users (if open-sourced):
 
 1. **Saved Searches** - Persist complex queries
 2. **Keyboard Shortcuts** - Quick access to common commands
-3. **Color Coding** - Different colors for different contexts/tags
-4. **Emoji Support** - Use emojis in tag/context names
+3. **Color Coding** - Different colors for different projects/tags
+4. **Emoji Support** - Use emojis in tag/project names
 5. **Multi-Workspace** - Manage multiple workspaces from one index
 
 ---
