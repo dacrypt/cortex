@@ -4,3 +4,4 @@ dist
 *.vsix
 .vscode-test
 .cortex
+.claude/settings.local.json
