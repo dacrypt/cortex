@@ -5,20 +5,31 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as os from "os";
+import * as fs from "fs/promises";
 
 // Core components
 import { FileScanner } from "./core/FileScanner";
 import { IndexStore } from "./core/IndexStore";
-import { MetadataStoreJSON as MetadataStore } from "./core/MetadataStoreJSON";
+import { MetadataStore as SQLiteMetadataStore } from "./core/MetadataStore";
+import { MetadataStoreJSON } from "./core/MetadataStoreJSON";
+import { IMetadataStore } from "./core/IMetadataStore";
 import { IndexingStatus } from "./core/IndexingStatus";
 import { IndexCache } from "./core/IndexCache";
 import { FileIndexEntry } from "./models/types";
+import { FileMetadata, MirrorMetadata } from "./models/types";
 import { BlacklistStore } from "./core/BlacklistStore";
 import { WorkerPool } from "./core/WorkerPool";
 import { ProjectAutoAssigner } from "./core/ProjectAutoAssigner";
+import { MirrorStore } from "./core/MirrorStore";
 import { isOsTaggingSupported } from "./utils/osTags";
 import { syncStoreTagsFromOs } from "./utils/tagSync";
+import {
+  extractKeyTerms,
+  isLikelyTextExtension,
+} from "./utils/aiSummary";
+import { resolveAIContent } from "./utils/aiContent";
 import { LLMService } from "./services/LLMService";
+import { saveAISummaryToFile } from "./utils/saveAISummary";
 
 // View providers
 import { ContextTreeProvider } from "./views/ContextTreeProvider";
@@ -31,6 +42,8 @@ import { ContentTypeTreeProvider } from "./views/ContentTypeTreeProvider";
 import { CodeMetricsTreeProvider } from "./views/CodeMetricsTreeProvider";
 import { DocumentMetricsTreeProvider } from "./views/DocumentMetricsTreeProvider";
 import { IssuesTreeProvider } from "./views/IssuesTreeProvider";
+import { FileInfoTreeProvider } from "./views/FileInfoTreeProvider";
+import { CategoryTreeProvider } from "./views/CategoryTreeProvider";
 
 // Metadata extraction
 import { MetadataExtractor } from "./extractors/MetadataExtractor";
@@ -66,7 +79,7 @@ type AccordionTreeProviderAny = {
 
 async function syncOsTagsForFiles(
   files: FileIndexEntry[],
-  metadataStore: MetadataStore,
+  metadataStore: IMetadataStore,
   onMetadataChanged: () => void
 ): Promise<void> {
   if (!isOsTaggingSupported()) {
@@ -392,6 +405,12 @@ async function startDocumentIndexing(
   workspaceRoot: string,
   indexStore: IndexStore,
   metadataExtractor: MetadataExtractor,
+  mirrorStore: MirrorStore,
+  updateMirrorTracking: (
+    file: FileIndexEntry,
+    mirrorPath: string,
+    sourceMtime: number
+  ) => void,
   provider: DocumentMetricsTreeProvider,
   updateIndexingStatus: (patch: Partial<IndexingStatus>) => void,
   filesToProcess?: FileIndexEntry[],
@@ -491,6 +510,24 @@ async function startDocumentIndexing(
                     successful++;
                   }
                 }
+                if (mirrorStore.isMirrorableExtension(file.extension)) {
+                  const mirrorPath = mirrorStore.getMirrorPath(
+                    file.relativePath,
+                    file.extension
+                  );
+                  const content = await mirrorStore.ensureMirrorContent(
+                    file.absolutePath,
+                    file.relativePath,
+                    file.extension
+                  );
+                  if (content != null && mirrorPath) {
+                    updateMirrorTracking(
+                      file,
+                      mirrorPath,
+                      file.lastModified
+                    );
+                  }
+                }
               } catch (error) {
                 console.error(
                   `[Cortex] Document extraction failed for ${file.filename}:`,
@@ -516,6 +553,24 @@ async function startDocumentIndexing(
                   file.enhanced.designMetadata
                 ) {
                   successful++;
+                }
+                if (mirrorStore.isMirrorableExtension(file.extension)) {
+                  const mirrorPath = mirrorStore.getMirrorPath(
+                    file.relativePath,
+                    file.extension
+                  );
+                  const content = await mirrorStore.ensureMirrorContent(
+                    file.absolutePath,
+                    file.relativePath,
+                    file.extension
+                  );
+                  if (content != null && mirrorPath) {
+                    updateMirrorTracking(
+                      file,
+                      mirrorPath,
+                      file.lastModified
+                    );
+                  }
                 }
               } catch (error) {
                 console.error(
@@ -732,6 +787,652 @@ async function startCodeMetricsIndexing(
 }
 
 /**
+ * Background indexing for document mirrors (MD/CSV twins)
+ */
+async function startMirrorIndexing(
+  mirrorStore: MirrorStore,
+  updateMirrorTracking: (
+    file: FileIndexEntry,
+    mirrorPath: string,
+    sourceMtime: number
+  ) => void,
+  filesToProcess?: FileIndexEntry[],
+  onBatchComplete?: () => void,
+  showProgress = true
+): Promise<void> {
+  const config = vscode.workspace.getConfiguration("cortex.mirror");
+  const maxFileSizeMb = config.get<number>("maxFileSizeMB", 25);
+  const maxFileSizeBytes = Math.max(1, maxFileSizeMb) * 1024 * 1024;
+  const maxConcurrency = Math.max(
+    1,
+    Math.min(config.get<number>("maxConcurrency", 1), 4)
+  );
+
+  const files = filesToProcess ?? [];
+  const targetFiles = files.filter(
+    (file) =>
+      mirrorStore.isMirrorableExtension(file.extension) &&
+      file.fileSize > 0 &&
+      file.fileSize <= maxFileSizeBytes
+  );
+
+  if (targetFiles.length === 0) {
+    console.log("[Cortex] No mirrorable documents found");
+    return;
+  }
+
+  const runIndexing = async (
+    progress?: vscode.Progress<{ message?: string; increment?: number }>
+  ) => {
+    console.log(
+      `[Cortex] Building mirrors for ${targetFiles.length} document files...`
+    );
+
+    const queue = [...targetFiles];
+    let processed = 0;
+    let updated = 0;
+    let skipped = 0;
+    let failed = 0;
+    let lastReported = 0;
+
+    const updateProgress = () => {
+      if (!progress) {
+        return;
+      }
+      if (processed % 10 === 0 || processed === targetFiles.length) {
+        const delta = processed - lastReported;
+        if (delta <= 0) {
+          return;
+        }
+        lastReported = processed;
+        progress.report({
+          message: `${processed}/${targetFiles.length} files`,
+          increment: (delta / targetFiles.length) * 100,
+        });
+      }
+    };
+
+    const worker = async () => {
+      while (queue.length > 0) {
+        const file = queue.shift();
+        if (!file) {
+          return;
+        }
+
+        try {
+          const mirrorPath = mirrorStore.getMirrorPath(
+            file.relativePath,
+            file.extension
+          );
+          if (
+            mirrorPath &&
+            file.enhanced?.mirror?.sourceMtime === file.lastModified &&
+            file.enhanced.indexed?.mirror &&
+            (await mirrorStore.mirrorExists(
+              file.relativePath,
+              file.extension
+            ))
+          ) {
+            skipped++;
+            continue;
+          }
+          const content = await mirrorStore.ensureMirrorContent(
+            file.absolutePath,
+            file.relativePath,
+            file.extension
+          );
+          if (content == null) {
+            failed++;
+          } else if (content.length === 0) {
+            skipped++;
+          } else {
+            updated++;
+            if (mirrorPath) {
+              updateMirrorTracking(file, mirrorPath, file.lastModified);
+            }
+          }
+        } catch (error) {
+          failed++;
+          console.warn(
+            `[Cortex] Mirror generation failed for ${file.relativePath}:`,
+            error
+          );
+        } finally {
+          processed++;
+          updateProgress();
+          onBatchComplete?.();
+        }
+      }
+    };
+
+    const workerCount = Math.min(maxConcurrency, targetFiles.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+    console.log(
+      `[Cortex] ✓ Mirror indexing complete (${updated} updated, ${skipped} unchanged, ${failed} failed)`
+    );
+  };
+
+  if (!showProgress) {
+    return runIndexing();
+  }
+
+  return vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: "Cortex: Building document mirrors",
+      cancellable: false,
+    },
+    async (progress) => {
+      await runIndexing(progress);
+    }
+  );
+}
+
+/**
+ * Background indexing for AI summaries
+ */
+async function startAISummaryIndexing(
+  indexStore: IndexStore,
+  metadataStore: IMetadataStore,
+  llmService: LLMService,
+  mirrorStore: MirrorStore,
+  workspaceRoot: string,
+  filesToProcess?: FileIndexEntry[],
+  onBatchComplete?: () => void,
+  showProgress = true
+): Promise<void> {
+  const config = vscode.workspace.getConfiguration("cortex.llm.autoSummary");
+  const enabled = config.get<boolean>("enabled", false);
+  if (!enabled || !llmService.isEnabled()) {
+    return;
+  }
+
+  const available = await llmService.isAvailable();
+  if (!available) {
+    console.warn("[Cortex] AI summaries skipped: LLM not available");
+    return;
+  }
+
+  const maxFileSize = config.get<number>("maxFileSize", 250000);
+  const maxConcurrency = Math.max(
+    1,
+    Math.min(config.get<number>("maxConcurrency", 2), 8)
+  );
+
+  const files = filesToProcess || indexStore.getAllFiles();
+  const targetFiles = files.filter(
+    (file) =>
+      (isLikelyTextExtension(file.extension) ||
+        mirrorStore.isMirrorableExtension(file.extension)) &&
+      file.fileSize > 0 &&
+      file.fileSize <= maxFileSize
+  );
+
+  if (targetFiles.length === 0) {
+    console.log("[Cortex] No files eligible for AI summaries");
+    return;
+  }
+
+  const runIndexing = async (
+    progress?: vscode.Progress<{ message?: string; increment?: number }>
+  ) => {
+      console.log(
+        `[Cortex] Starting AI summary indexing for ${targetFiles.length} files...`
+      );
+
+      const queue = [...targetFiles];
+      let processed = 0;
+      let summarized = 0;
+      let skipped = 0;
+      let failed = 0;
+      let lastReported = 0;
+
+      const updateProgress = () => {
+        if (!progress) {
+          return;
+        }
+        if (processed % 10 === 0 || processed === targetFiles.length) {
+          const delta = processed - lastReported;
+          if (delta <= 0) {
+            return;
+          }
+          lastReported = processed;
+          progress.report({
+            message: `${processed}/${targetFiles.length} files`,
+            increment: (delta / targetFiles.length) * 100,
+          });
+        }
+      };
+
+      const worker = async () => {
+        while (queue.length > 0) {
+          const file = queue.shift();
+          if (!file) {
+            return;
+          }
+
+          try {
+            const aiContent = await resolveAIContent(
+              {
+                absolutePath: file.absolutePath,
+                relativePath: file.relativePath,
+                extension: file.extension,
+              },
+              mirrorStore
+            );
+            if (!aiContent) {
+              skipped++;
+              continue;
+            }
+
+            const content = aiContent.content;
+            const contentHash = aiContent.contentHash;
+            const metadata = metadataStore.getMetadataByPath(
+              file.relativePath
+            ) as FileMetadata | null;
+
+            if (
+              metadata?.aiSummary &&
+              metadata.aiSummaryHash === contentHash
+            ) {
+              if (!metadata.aiKeyTerms || metadata.aiKeyTerms.length === 0) {
+                metadataStore.updateAISummary(
+                  file.relativePath,
+                  metadata.aiSummary,
+                  contentHash,
+                  extractKeyTerms(content)
+                );
+              }
+              skipped++;
+              continue;
+            }
+
+            const summary = await llmService.generateFileSummary(
+              file.relativePath,
+              content
+            );
+
+            if (summary) {
+              const keyTerms = extractKeyTerms(content);
+              metadataStore.updateAISummary(
+                file.relativePath,
+                summary,
+                contentHash,
+                keyTerms
+              );
+              
+              // Save summary to repository
+              await saveAISummaryToFile(
+                workspaceRoot,
+                file.relativePath,
+                summary,
+                contentHash,
+                keyTerms
+              );
+              
+              summarized++;
+            } else {
+              failed++;
+            }
+          } catch (error) {
+            failed++;
+            console.warn(
+              `[Cortex] AI summary failed for ${file.relativePath}:`,
+              error
+            );
+          } finally {
+            processed++;
+            updateProgress();
+            onBatchComplete?.();
+          }
+        }
+      };
+
+      const workerCount = Math.min(maxConcurrency, targetFiles.length);
+      await Promise.all(
+        Array.from({ length: workerCount }, () => worker())
+      );
+
+      console.log(
+        `[Cortex] ✓ AI summary indexing complete (${summarized} summarized, ${skipped} skipped, ${failed} failed)`
+      );
+  };
+
+  if (!showProgress) {
+    return runIndexing();
+  }
+
+  return vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: "Cortex: Generating AI summaries",
+      cancellable: false,
+    },
+    async (progress) => {
+      await runIndexing(progress);
+    }
+  );
+}
+
+/**
+ * Background indexing for AI tags and project suggestions
+ */
+async function startAITagProjectIndexing(
+  indexStore: IndexStore,
+  metadataStore: IMetadataStore,
+  llmService: LLMService,
+  mirrorStore: MirrorStore,
+  workspaceRoot: string,
+  filesToProcess?: FileIndexEntry[],
+  onBatchComplete?: () => void,
+  showProgress = true,
+  onRefreshViews?: () => void
+): Promise<void> {
+  const config = vscode.workspace.getConfiguration("cortex.llm.autoIndex");
+  const enabled = config.get<boolean>("enabled", false);
+  if (!enabled || !llmService.isEnabled()) {
+    console.log(
+      `[Cortex][AI] Auto-index disabled (enabled=${enabled}, llmEnabled=${llmService.isEnabled()})`
+    );
+    return;
+  }
+
+  const available = await llmService.isAvailable();
+  if (!available) {
+    console.warn("[Cortex] AI tags/projects skipped: LLM not available");
+    return;
+  }
+
+  const applyTags = config.get<boolean>("applyTags", false);
+  const applyProjects = config.get<boolean>("applyProjects", false);
+  const useSuggestedContexts = config.get<boolean>(
+    "useSuggestedContexts",
+    true
+  );
+  const maxFileSize = config.get<number>("maxFileSize", 250000);
+  const maxConcurrency = Math.max(
+    1,
+    Math.min(config.get<number>("maxConcurrency", 2), 8)
+  );
+
+  if (!applyTags && !applyProjects) {
+    console.log(
+      "[Cortex][AI] Auto-index configured but both applyTags/applyProjects are false"
+    );
+    return;
+  }
+
+  console.log(
+    `[Cortex][AI] Auto-index config applyTags=${applyTags} applyProjects=${applyProjects} useSuggestedContexts=${useSuggestedContexts} maxFileSize=${maxFileSize} maxConcurrency=${maxConcurrency}`
+  );
+
+  const files = filesToProcess || indexStore.getAllFiles();
+  const targetFiles = files.filter(
+    (file) =>
+      (isLikelyTextExtension(file.extension) ||
+        mirrorStore.isMirrorableExtension(file.extension)) &&
+      file.fileSize > 0 &&
+      file.fileSize <= maxFileSize
+  );
+
+  if (targetFiles.length === 0) {
+    console.log("[Cortex] No files eligible for AI tags/projects");
+    return;
+  }
+
+  const runIndexing = async (
+    progress?: vscode.Progress<{ message?: string; increment?: number }>
+  ) => {
+      console.log(
+        `[Cortex] Starting AI tag/project indexing for ${targetFiles.length} files...`
+      );
+
+      const queue = [...targetFiles];
+      let processed = 0;
+      let tagged = 0;
+      let suggestedProjects = 0;
+      let skipped = 0;
+      let failed = 0;
+      let lastReported = 0;
+
+      const updateProgress = () => {
+        if (!progress) {
+          return;
+        }
+        if (processed % 10 === 0 || processed === targetFiles.length) {
+          const delta = processed - lastReported;
+          if (delta <= 0) {
+            return;
+          }
+          lastReported = processed;
+          progress.report({
+            message: `${processed}/${targetFiles.length} files`,
+            increment: (delta / targetFiles.length) * 100,
+          });
+        }
+      };
+
+      const worker = async () => {
+        while (queue.length > 0) {
+          const file = queue.shift();
+          if (!file) {
+            return;
+          }
+
+          try {
+            console.log(`[Cortex][AI] Processing ${file.relativePath}`);
+            const aiContent = await resolveAIContent(
+              {
+                absolutePath: file.absolutePath,
+                relativePath: file.relativePath,
+                extension: file.extension,
+              },
+              mirrorStore
+            );
+            if (!aiContent) {
+              console.log(
+                `[Cortex][AI] Skipped ${file.relativePath}: no readable content`
+              );
+              skipped++;
+              continue;
+            }
+
+            const content = aiContent.content;
+            const contentHash = aiContent.contentHash;
+            const metadata = metadataStore.getMetadataByPath(
+              file.relativePath
+            ) as FileMetadata | null;
+            let summary =
+              metadata?.aiSummary && metadata?.aiSummaryHash === contentHash
+                ? metadata.aiSummary
+                : undefined;
+            const keyTerms =
+              metadata?.aiKeyTerms && metadata.aiKeyTerms.length > 0
+                ? metadata.aiKeyTerms
+                : extractKeyTerms(content);
+
+            if (!summary) {
+              const gen = await llmService.generateFileSummary(
+                file.relativePath,
+                content
+              );
+              if (gen != null) {
+                summary = gen;
+                metadataStore.updateAISummary(
+                  file.relativePath,
+                  summary,
+                  contentHash,
+                  keyTerms
+                );
+                
+                // Save summary to repository
+                await saveAISummaryToFile(
+                  workspaceRoot,
+                  file.relativePath,
+                  summary,
+                  contentHash,
+                  keyTerms
+                );
+                
+                console.log(
+                  `[Cortex][AI] Summary generated for ${file.relativePath}`
+                );
+              }
+            } else if (!metadata?.aiKeyTerms || metadata.aiKeyTerms.length === 0) {
+              metadataStore.updateAISummary(
+                file.relativePath,
+                summary,
+                contentHash,
+                keyTerms
+              );
+              
+              // Save summary to repository even if it was cached
+              await saveAISummaryToFile(
+                workspaceRoot,
+                file.relativePath,
+                summary,
+                contentHash,
+                keyTerms
+              );
+              
+              console.log(
+                `[Cortex][AI] Summary cache refreshed for ${file.relativePath}`
+              );
+            }
+
+            const snippet = content.slice(0, 500);
+
+            if (applyTags) {
+              const suggestedTags = await llmService.suggestTags(
+                file.relativePath,
+                content,
+                { summary, keyTerms, snippet }
+              );
+
+              if (suggestedTags.length > 0) {
+                const existingTags = metadata?.tags || [];
+                const newTags = suggestedTags.filter(
+                  (tag) => !existingTags.includes(tag)
+                );
+                if (newTags.length > 0) {
+                  newTags.forEach((tag) =>
+                    metadataStore.addTag(file.relativePath, tag)
+                  );
+                  tagged += 1;
+                  console.log(
+                    `[Cortex][AI] Applied ${newTags.length} tag(s) to ${file.relativePath}`
+                  );
+                }
+              } else {
+                console.log(
+                  `[Cortex][AI] No tag suggestions for ${file.relativePath}`
+                );
+              }
+            }
+
+            if (applyProjects) {
+              const recentFiles: string[] = [];
+              const allContexts = metadataStore.getAllContexts();
+              const dirPath = file.relativePath.substring(
+                0,
+                file.relativePath.lastIndexOf("/")
+              );
+
+              for (const context of allContexts.slice(0, 3)) {
+                const filesInContext = metadataStore.getFilesByContext(context);
+                recentFiles.push(...filesInContext.slice(0, 3));
+              }
+              if (dirPath) {
+                recentFiles.push(`${dirPath}/*`);
+              }
+
+              const suggestedProject = await llmService.suggestProject(
+                file.relativePath,
+                content,
+                recentFiles,
+                { summary, keyTerms, snippet }
+              );
+
+              if (suggestedProject) {
+                const existingContexts = metadata?.contexts || [];
+                if (!existingContexts.includes(suggestedProject)) {
+                  if (useSuggestedContexts) {
+                    metadataStore.addSuggestedContext(
+                      file.relativePath,
+                      suggestedProject
+                    );
+                    console.log(
+                      `[Cortex][AI] Suggested project "${suggestedProject}" for ${file.relativePath}`
+                    );
+                  } else {
+                    metadataStore.addContext(
+                      file.relativePath,
+                      suggestedProject
+                    );
+                    console.log(
+                      `[Cortex][AI] Applied project "${suggestedProject}" to ${file.relativePath}`
+                    );
+                  }
+                  suggestedProjects += 1;
+                } else {
+                  console.log(
+                    `[Cortex][AI] Project "${suggestedProject}" already applied to ${file.relativePath}`
+                  );
+                }
+            } else {
+              console.log(
+                `[Cortex][AI] No project suggestion for ${file.relativePath}`
+              );
+            }
+          }
+        } catch (error) {
+          failed++;
+          console.warn(
+            `[Cortex] AI tag/project failed for ${file.relativePath}:`,
+            error
+          );
+        } finally {
+          processed++;
+          updateProgress();
+          
+          // Refresh views periodically to show newly indexed tags
+          if (processed % 20 === 0 && onRefreshViews) {
+            onRefreshViews();
+          }
+          
+          onBatchComplete?.();
+        }
+        }
+      };
+
+      const workerCount = Math.min(maxConcurrency, targetFiles.length);
+      await Promise.all(
+        Array.from({ length: workerCount }, () => worker())
+      );
+
+      console.log(
+        `[Cortex] ✓ AI tag/project indexing complete (${tagged} tagged, ${suggestedProjects} projects, ${skipped} skipped, ${failed} failed)`
+      );
+  };
+
+  if (!showProgress) {
+    return runIndexing();
+  }
+
+  return vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: "Cortex: Generating AI tags/projects",
+      cancellable: false,
+    },
+    async (progress) => {
+      await runIndexing(progress);
+    }
+  );
+}
+
+/**
  * Extension activation
  */
 export async function activate(context: vscode.ExtensionContext) {
@@ -790,8 +1491,27 @@ export async function activate(context: vscode.ExtensionContext) {
     `[Cortex] Worker pools initialized (max ${maxThreads} threads): basic=${poolSizes[0]}, content-type=${poolSizes[1]}, code=${poolSizes[2]}, documents=${poolSizes[3]}`
   );
   const indexStore = new IndexStore();
-  const metadataStore = new MetadataStore(workspaceRoot);
+  let metadataStore: IMetadataStore;
+  try {
+    const sqliteStore = new SQLiteMetadataStore(workspaceRoot);
+    await sqliteStore.initialize();
+    metadataStore = sqliteStore;
+  } catch (error) {
+    const sqliteMessage =
+      error instanceof Error ? error.message : String(error);
+    console.warn(
+      "[Cortex] SQLite metadata store failed, falling back to JSON."
+    );
+    console.warn(
+      "[Cortex] To enable SQLite, rebuild better-sqlite3 (e.g. `npm rebuild better-sqlite3`)."
+    );
+    console.warn("[Cortex] SQLite init error:", sqliteMessage);
+    const jsonStore = new MetadataStoreJSON(workspaceRoot);
+    await jsonStore.initialize();
+    metadataStore = jsonStore;
+  }
   const metadataExtractor = new MetadataExtractor(workspaceRoot);
+  const mirrorStore = new MirrorStore(workspaceRoot);
   const indexCache = new IndexCache(workspaceRoot);
   const llmService = new LLMService();
   let cachedEntries: FileIndexEntry[] = [];
@@ -832,8 +1552,7 @@ export async function activate(context: vscode.ExtensionContext) {
     isIndexing: true,
   };
 
-  // Initialize metadata store
-  await metadataStore.initialize();
+  // Metadata store initialized during selection.
 
   // Initialize tree view providers
   const contextTreeProvider = new ContextTreeProvider(
@@ -899,8 +1618,22 @@ export async function activate(context: vscode.ExtensionContext) {
   const issuesTreeProvider = new IssuesTreeProvider(
     workspaceRoot,
     indexStore,
-    basicStatus,
+    undefined,
     blacklistStore
+  );
+
+  const fileInfoTreeProvider = new FileInfoTreeProvider(
+    workspaceRoot,
+    metadataStore,
+    indexStore
+  );
+
+  const categoryTreeProvider = new CategoryTreeProvider(
+    workspaceRoot,
+    metadataStore,
+    indexStore,
+    llmService,
+    scanStatus
   );
 
   // Register tree views
@@ -963,6 +1696,16 @@ export async function activate(context: vscode.ExtensionContext) {
     showCollapseAll: false,
   });
 
+  const fileInfoTreeView = vscode.window.createTreeView("cortex-fileInfoView", {
+    treeDataProvider: fileInfoTreeProvider,
+    showCollapseAll: false,
+  });
+
+  const categoryTreeView = vscode.window.createTreeView("cortex-categoryView", {
+    treeDataProvider: categoryTreeProvider,
+    showCollapseAll: false,
+  });
+
   const accordionViews: Array<{
     id: string;
     view: vscode.TreeView<unknown>;
@@ -1001,6 +1744,11 @@ export async function activate(context: vscode.ExtensionContext) {
       id: "cortex-issuesView",
       view: issuesTreeView,
       provider: issuesTreeProvider,
+    },
+    {
+      id: "cortex-categoryView",
+      view: categoryTreeView,
+      provider: categoryTreeProvider,
     },
   ];
 
@@ -1118,6 +1866,255 @@ export async function activate(context: vscode.ExtensionContext) {
     codeMetricsTreeProvider.refresh();
     documentMetricsTreeProvider.refresh();
     issuesTreeProvider.refresh();
+    categoryTreeProvider.refresh();
+    fileInfoTreeProvider.refresh();
+  };
+
+  const updateMirrorTracking = (
+    file: FileIndexEntry,
+    mirrorPath: string,
+    sourceMtime: number
+  ) => {
+    if (!file.enhanced) {
+      file.enhanced = {
+        stats: {
+          size: 0,
+          created: 0,
+          modified: 0,
+          accessed: 0,
+          isReadOnly: false,
+          isHidden: false,
+        },
+        folder: file.relativePath.includes("/")
+          ? file.relativePath.substring(0, file.relativePath.lastIndexOf("/"))
+          : ".",
+        depth: file.relativePath.split("/").length - 1,
+      };
+    }
+    if (!file.enhanced.indexed) {
+      file.enhanced.indexed = {};
+    }
+    file.enhanced.indexed.mirror = true;
+    const mirror = {
+      format: mirrorStore.getMirrorFormat(file.extension) ?? "md",
+      path: mirrorPath,
+      sourceMtime,
+      updatedAt: Date.now(),
+    };
+    file.enhanced.mirror = mirror;
+    const storeWithMirror = metadataStore as {
+      updateMirrorMetadata?: (relativePath: string, mirror: MirrorMetadata) => void;
+    };
+    storeWithMirror.updateMirrorMetadata?.(file.relativePath, mirror);
+  };
+
+  const removeMetadataEntry = (relativePath: string) => {
+    const storeWithRemove = metadataStore as {
+      removeFile?: (path: string) => void;
+    };
+    storeWithRemove.removeFile?.(relativePath);
+  };
+
+  type RecentDeleteEntry = {
+    file: FileIndexEntry;
+    metadata: ReturnType<typeof metadataStore.getMetadataByPath> | null;
+    deletedAt: number;
+  };
+
+  const recentDeletes = new Map<string, RecentDeleteEntry>();
+  let deleteCleanupTimer: NodeJS.Timeout | undefined;
+  const RENAME_WINDOW_MS = 5000;
+
+  const scheduleDeleteCleanup = () => {
+    if (deleteCleanupTimer) {
+      return;
+    }
+    deleteCleanupTimer = setTimeout(() => {
+      deleteCleanupTimer = undefined;
+      const now = Date.now();
+      for (const [relativePath, entry] of recentDeletes.entries()) {
+        if (now - entry.deletedAt < RENAME_WINDOW_MS) {
+          continue;
+        }
+        removeMetadataEntry(relativePath);
+        void mirrorStore.removeMirror(
+          relativePath,
+          path.extname(relativePath)
+        );
+        recentDeletes.delete(relativePath);
+      }
+    }, RENAME_WINDOW_MS);
+  };
+
+  const findRenameCandidate = (
+    file: FileIndexEntry
+  ): RecentDeleteEntry | null => {
+    for (const entry of recentDeletes.values()) {
+      if (Math.abs(entry.file.lastModified - file.lastModified) > 5) {
+        continue;
+      }
+      if (entry.file.fileSize !== file.fileSize) {
+        continue;
+      }
+      return entry;
+    }
+    return null;
+  };
+
+  const migrateMetadata = async (
+    oldEntry: RecentDeleteEntry,
+    newEntry: FileIndexEntry
+  ) => {
+    const oldPath = oldEntry.file.relativePath;
+    const newPath = newEntry.relativePath;
+    const existing =
+      (oldEntry.metadata ??
+        metadataStore.getMetadataByPath(oldPath)) as FileMetadata | null;
+    if (!existing) {
+      return;
+    }
+
+    metadataStore.getOrCreateMetadata(newPath, newEntry.extension);
+
+    for (const tag of existing.tags ?? []) {
+      metadataStore.addTag(newPath, tag);
+    }
+    for (const context of existing.contexts ?? []) {
+      metadataStore.addContext(newPath, context);
+    }
+    for (const suggested of existing.suggestedContexts ?? []) {
+      metadataStore.addSuggestedContext(newPath, suggested);
+    }
+    if (existing.notes) {
+      metadataStore.updateNotes(newPath, existing.notes);
+    }
+    if (existing.aiSummary && existing.aiSummaryHash) {
+      metadataStore.updateAISummary(
+        newPath,
+        existing.aiSummary,
+        existing.aiSummaryHash,
+        existing.aiKeyTerms
+      );
+    }
+
+    if (existing.mirror) {
+      const nextMirrorPath = mirrorStore.getMirrorPath(
+        newPath,
+        newEntry.extension
+      );
+      if (nextMirrorPath) {
+        try {
+          await fs.mkdir(path.dirname(nextMirrorPath), { recursive: true });
+          await fs.rename(existing.mirror.path, nextMirrorPath);
+          metadataStore.updateMirrorMetadata(newPath, {
+            format: existing.mirror.format,
+            path: nextMirrorPath,
+            sourceMtime: newEntry.lastModified,
+            updatedAt: Date.now(),
+          });
+        } catch {
+          // Fall back to regeneration on next index pass.
+        }
+      }
+    }
+
+    removeMetadataEntry(oldPath);
+  };
+
+  const hydrateMirrorMetadata = (files: FileIndexEntry[]) => {
+    let hydrated = 0;
+    files.forEach((file) => {
+      const metadata = metadataStore.getMetadataByPath(file.relativePath);
+      if (!metadata?.mirror) {
+        return;
+      }
+      if (!file.enhanced) {
+        file.enhanced = {
+          stats: {
+            size: 0,
+            created: 0,
+            modified: 0,
+            accessed: 0,
+            isReadOnly: false,
+            isHidden: false,
+          },
+          folder: file.relativePath.includes("/")
+            ? file.relativePath.substring(0, file.relativePath.lastIndexOf("/"))
+            : ".",
+          depth: file.relativePath.split("/").length - 1,
+        };
+      }
+      if (!file.enhanced.indexed) {
+        file.enhanced.indexed = {};
+      }
+      file.enhanced.mirror = metadata.mirror;
+      file.enhanced.indexed.mirror = true;
+      hydrated += 1;
+    });
+    if (hydrated > 0) {
+      console.log(`[Cortex] Hydrated mirror metadata for ${hydrated} files`);
+    }
+  };
+
+  const verifyMirrorCache = async (files: FileIndexEntry[]) => {
+    let missing = 0;
+    let stale = 0;
+    let restored = 0;
+
+    for (const file of files) {
+      if (!mirrorStore.isMirrorableExtension(file.extension)) {
+        continue;
+      }
+      const mirrorPath = mirrorStore.getMirrorPath(
+        file.relativePath,
+        file.extension
+      );
+      if (!mirrorPath) {
+        continue;
+      }
+
+      const exists = await mirrorStore.mirrorExists(
+        file.relativePath,
+        file.extension
+      );
+      if (!exists) {
+        if (file.enhanced?.indexed) {
+          file.enhanced.indexed.mirror = false;
+        }
+        const storeWithClear = metadataStore as {
+          clearMirrorMetadata?: (relativePath: string) => void;
+        };
+        storeWithClear.clearMirrorMetadata?.(file.relativePath);
+        missing += 1;
+        continue;
+      }
+
+      const sourceMtime = file.lastModified;
+      if (file.enhanced?.mirror?.sourceMtime !== sourceMtime) {
+        if (file.enhanced?.indexed) {
+          file.enhanced.indexed.mirror = false;
+        }
+        const storeWithClear = metadataStore as {
+          clearMirrorMetadata?: (relativePath: string) => void;
+        };
+        storeWithClear.clearMirrorMetadata?.(file.relativePath);
+        stale += 1;
+        continue;
+      }
+
+      if (!file.enhanced?.mirror) {
+        updateMirrorTracking(file, mirrorPath, sourceMtime);
+        restored += 1;
+      } else if (file.enhanced?.indexed) {
+        file.enhanced.indexed.mirror = true;
+      }
+    }
+
+    if (missing > 0 || stale > 0 || restored > 0) {
+      console.log(
+        `[Cortex] Mirror verification: ${missing} missing, ${stale} stale, ${restored} restored`
+      );
+    }
   };
 
   let cacheSaveTimer: NodeJS.Timeout | undefined;
@@ -1165,6 +2162,13 @@ export async function activate(context: vscode.ExtensionContext) {
   if (cachedEntries.length > 0) {
     indexStore.buildIndex(cachedEntries);
     console.log(`[Cortex] Loaded ${cachedEntries.length} cached index entries`);
+    updateIndexingStatus({
+      phase: "done",
+      message: "Listo",
+      processed: cachedEntries.length,
+      total: cachedEntries.length,
+      isIndexing: false,
+    });
     refreshAllViews();
   }
 
@@ -1227,15 +2231,15 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // AI-powered commands
     vscode.commands.registerCommand("cortex.suggestTagsAI", () =>
-      suggestTagsAI(llmService, metadataStore, workspaceRoot)
+      suggestTagsAI(llmService, metadataStore, mirrorStore, workspaceRoot)
     ),
 
     vscode.commands.registerCommand("cortex.suggestProjectAI", () =>
-      suggestProjectAI(llmService, metadataStore, workspaceRoot)
+      suggestProjectAI(llmService, metadataStore, mirrorStore, workspaceRoot)
     ),
 
     vscode.commands.registerCommand("cortex.generateSummaryAI", () =>
-      generateSummaryAI(llmService, metadataStore, workspaceRoot)
+      generateSummaryAI(llmService, metadataStore, mirrorStore, workspaceRoot)
     ),
 
     // Refresh views command (used by AI commands)
@@ -1254,12 +2258,164 @@ export async function activate(context: vscode.ExtensionContext) {
     codeMetricsTreeView,
     documentMetricsTreeView,
     issuesTreeView,
+    categoryTreeView,
     { dispose: () => basicPool.dispose() },
     { dispose: () => contentTypePool.dispose() },
     { dispose: () => codePool.dispose() },
     { dispose: () => documentPool.dispose() },
     ...commands
   );
+
+  const documentExtensions = new Set([
+    ".docx",
+    ".doc",
+    ".xlsx",
+    ".xls",
+    ".pptx",
+    ".ppt",
+    ".pdf",
+    ".psd",
+    ".odt",
+    ".ods",
+  ]);
+
+  const pendingReindex = new Map<string, FileIndexEntry>();
+  let reindexTimer: NodeJS.Timeout | undefined;
+  let reindexRunning = false;
+
+  const reindexFilesIncremental = async (files: FileIndexEntry[]) => {
+    const eligible = files.filter(
+      (file) => !blacklistStore.isBlacklisted(file.relativePath)
+    );
+    if (eligible.length === 0) {
+      return;
+    }
+
+    const mirrorConfig = vscode.workspace.getConfiguration("cortex.mirror");
+    const maxMirrorFileSizeMb = mirrorConfig.get<number>(
+      "maxFileSizeMB",
+      25
+    );
+    const maxMirrorFileSizeBytes = Math.max(1, maxMirrorFileSizeMb) * 1024 * 1024;
+    const mirrorEligible = eligible.filter(
+      (file) =>
+        mirrorStore.isMirrorableExtension(file.extension) &&
+        file.fileSize > 0 &&
+        file.fileSize <= maxMirrorFileSizeBytes
+    );
+
+    await Promise.all(
+      eligible.map(async (file) => {
+        try {
+          const enhanced = await metadataExtractor.extractBasic(
+            file.absolutePath,
+            file.relativePath,
+            file.extension
+          );
+          await metadataExtractor.extractMimeTypeMetadata(
+            file.absolutePath,
+            enhanced
+          );
+          if (enhanced.language) {
+            await metadataExtractor.extractCodeMetadata(
+              file.absolutePath,
+              enhanced
+            );
+          }
+          if (documentExtensions.has(file.extension.toLowerCase())) {
+            await metadataExtractor.extractDocumentMetadata(
+              file.absolutePath,
+              enhanced,
+              file.extension
+            );
+          }
+          file.enhanced = enhanced;
+        } catch (error) {
+          console.warn(
+            `[Cortex] Incremental reindex failed for ${file.relativePath}:`,
+            error
+          );
+        }
+      })
+    );
+
+    await Promise.all(
+      mirrorEligible.map(async (file) => {
+        const mirrorPath = mirrorStore.getMirrorPath(
+          file.relativePath,
+          file.extension
+        );
+        if (
+          mirrorPath &&
+          file.enhanced?.mirror?.sourceMtime === file.lastModified &&
+          file.enhanced.indexed?.mirror &&
+          (await mirrorStore.mirrorExists(file.relativePath, file.extension))
+        ) {
+          return;
+        }
+        const content = await mirrorStore.ensureMirrorContent(
+          file.absolutePath,
+          file.relativePath,
+          file.extension
+        );
+        if (content != null && mirrorPath) {
+          updateMirrorTracking(file, mirrorPath, file.lastModified);
+        }
+      })
+    );
+
+    await startAISummaryIndexing(
+      indexStore,
+      metadataStore,
+      llmService,
+      mirrorStore,
+      workspaceRoot,
+      eligible,
+      scheduleCacheSave,
+      false
+    );
+    await startAITagProjectIndexing(
+      indexStore,
+      metadataStore,
+      llmService,
+      mirrorStore,
+      workspaceRoot,
+      eligible,
+      scheduleCacheSave,
+      false,
+      refreshAllViews
+    );
+
+    scheduleRefreshAllViews();
+    scheduleCacheSave();
+  };
+
+  const runReindexQueue = async () => {
+    if (reindexRunning) {
+      return;
+    }
+    reindexRunning = true;
+    try {
+      while (pendingReindex.size > 0) {
+        const batch = Array.from(pendingReindex.values());
+        pendingReindex.clear();
+        await reindexFilesIncremental(batch);
+      }
+    } finally {
+      reindexRunning = false;
+    }
+  };
+
+  const scheduleReindex = (file: FileIndexEntry) => {
+    pendingReindex.set(file.relativePath, file);
+    if (reindexTimer) {
+      return;
+    }
+    reindexTimer = setTimeout(() => {
+      reindexTimer = undefined;
+      void runReindexQueue();
+    }, 1500);
+  };
 
   // File watcher for incremental updates (optional enhancement)
   const fileWatcher = vscode.workspace.createFileSystemWatcher("**/*");
@@ -1279,10 +2435,16 @@ export async function activate(context: vscode.ExtensionContext) {
     const fileEntry = await fileScanner.getFileEntry(absolutePath);
     if (fileEntry) {
       indexStore.upsertFile(fileEntry);
+      const renameCandidate = findRenameCandidate(fileEntry);
+      if (renameCandidate) {
+        recentDeletes.delete(renameCandidate.file.relativePath);
+        await migrateMetadata(renameCandidate, fileEntry);
+      }
       metadataStore.getOrCreateMetadata(
         fileEntry.relativePath,
         fileEntry.extension
       );
+      scheduleReindex(fileEntry);
       if (isOsTaggingSupported()) {
         void syncStoreTagsFromOs(
           metadataStore,
@@ -1306,9 +2468,48 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   });
 
+  fileWatcher.onDidChange(async (uri) => {
+    const absolutePath = uri.fsPath;
+    const relativePath = path.relative(workspaceRoot, absolutePath);
+
+    if (shouldIgnorePath(relativePath)) {
+      return;
+    }
+    if (blacklistStore.isBlacklisted(relativePath)) {
+      return;
+    }
+
+    const fileEntry = await fileScanner.getFileEntry(absolutePath);
+    if (fileEntry) {
+      indexStore.upsertFile(fileEntry);
+      metadataStore.getOrCreateMetadata(
+        fileEntry.relativePath,
+        fileEntry.extension
+      );
+      scheduleReindex(fileEntry);
+      scheduleRefreshAllViews();
+      scheduleCacheSave();
+    }
+  });
+
   fileWatcher.onDidDelete((uri) => {
     const relativePath = path.relative(workspaceRoot, uri.fsPath);
+    const existing = indexStore.getFile(relativePath);
     indexStore.removeFile(relativePath);
+    if (existing) {
+      const metadata = metadataStore.getMetadataByPath(
+        relativePath
+      ) as FileMetadata | null;
+      recentDeletes.set(relativePath, {
+        file: existing,
+        metadata,
+        deletedAt: Date.now(),
+      });
+      scheduleDeleteCleanup();
+    } else {
+      removeMetadataEntry(relativePath);
+      void mirrorStore.removeMirror(relativePath, path.extname(relativePath));
+    }
     refreshAllViews();
     scheduleCacheSave();
   });
@@ -1320,101 +2521,116 @@ export async function activate(context: vscode.ExtensionContext) {
     try {
       // Phase 1: Instant file scan (no metadata extraction - super fast!)
       let files: FileIndexEntry[] = [];
-      updateIndexingStatus({
-        phase: "scanning",
-        message: "Escaneando",
-        processed: 0,
-        total: 0,
-        isIndexing: true,
-      });
-      await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: "Cortex: Scanning workspace...",
-          cancellable: false,
-        },
-        async (progress) => {
-          console.log("[Cortex] Starting workspace scan...");
-          files = await fileScanner.scanWorkspace((processed) => {
-            updateIndexingStatus({
-              phase: "scanning",
-              message: "Escaneando",
-              processed,
-              total: 0,
-              isIndexing: true,
-            });
+      const hasCache = cachedEntries.length > 0;
+      const scanMessage = hasCache ? "Detectando cambios" : "Escaneando";
+      const runWorkspaceScan = async (
+        progress?: vscode.Progress<{ message?: string }>
+      ) => {
+        updateIndexingStatus({
+          phase: "scanning",
+          message: scanMessage,
+          processed: 0,
+          total: 0,
+          isIndexing: true,
+        });
+        console.log("[Cortex] Starting workspace scan...");
+        files = await fileScanner.scanWorkspace((processed) => {
+          updateIndexingStatus({
+            phase: "scanning",
+            message: scanMessage,
+            processed,
+            total: 0,
+            isIndexing: true,
           });
-          const cachedMap = new Map(
-            cachedEntries.map((entry) => [entry.relativePath, entry])
-          );
-          const merged: FileIndexEntry[] = [];
-          changedFiles = [];
+        });
+        const cachedMap = new Map(
+          cachedEntries.map((entry) => [entry.relativePath, entry])
+        );
+        const merged: FileIndexEntry[] = [];
+        changedFiles = [];
 
-          for (const file of files) {
-            const cached = cachedMap.get(file.relativePath);
-            if (
-              cached &&
-              cached.lastModified === file.lastModified &&
-              cached.fileSize === file.fileSize
-            ) {
-              merged.push(cached);
-            } else {
-              merged.push(file);
-              changedFiles.push(file);
-            }
-            cachedMap.delete(file.relativePath);
+        for (const file of files) {
+          const cached = cachedMap.get(file.relativePath);
+          if (
+            cached &&
+            cached.lastModified === file.lastModified &&
+            cached.fileSize === file.fileSize
+          ) {
+            merged.push(cached);
+          } else {
+            merged.push(file);
+            changedFiles.push(file);
           }
-
-          indexStore.buildIndex(merged);
-          files = merged;
-          console.log(
-            `[Cortex] Scan merge complete: ${merged.length} total, ${changedFiles.length} changed/new, ${cachedMap.size} deleted`
-          );
-          console.log("[Cortex] Workspace scan finished, building index...");
-
-          // Initialize empty enhanced metadata for all files
-          let initializedDefaults = 0;
-          files.forEach((file) => {
-            if (!file.enhanced) {
-              file.enhanced = {
-                stats: {
-                  size: 0,
-                  created: 0,
-                  modified: 0,
-                  accessed: 0,
-                  isReadOnly: false,
-                  isHidden: false,
-                },
-                folder: file.relativePath.includes("/")
-                  ? file.relativePath.substring(
-                      0,
-                      file.relativePath.lastIndexOf("/")
-                    )
-                  : ".",
-                depth: file.relativePath.split("/").length - 1,
-              };
-              initializedDefaults += 1;
-            }
-          });
-          if (initializedDefaults > 0) {
-            console.log(
-              `[Cortex] Initialized defaults for ${initializedDefaults} files`
-            );
-          }
-
-          const createdMetadata = metadataStore.ensureMetadataForFiles(
-            files.map((file) => ({
-              relativePath: file.relativePath,
-              extension: file.extension,
-            }))
-          );
-          if (createdMetadata > 0) {
-            console.log(`[Cortex] Created ${createdMetadata} metadata entries`);
-          }
-
-          progress.report({ message: `Found ${files.length} files` });
+          cachedMap.delete(file.relativePath);
         }
-      );
+
+        indexStore.buildIndex(merged);
+        files = merged;
+        console.log(
+          `[Cortex] Scan merge complete: ${merged.length} total, ${changedFiles.length} changed/new, ${cachedMap.size} deleted`
+        );
+        console.log("[Cortex] Workspace scan finished, building index...");
+
+        // Initialize empty enhanced metadata for all files
+        let initializedDefaults = 0;
+        files.forEach((file) => {
+          if (!file.enhanced) {
+            file.enhanced = {
+              stats: {
+                size: 0,
+                created: 0,
+                modified: 0,
+                accessed: 0,
+                isReadOnly: false,
+                isHidden: false,
+              },
+              folder: file.relativePath.includes("/")
+                ? file.relativePath.substring(
+                    0,
+                    file.relativePath.lastIndexOf("/")
+                  )
+                : ".",
+              depth: file.relativePath.split("/").length - 1,
+            };
+            initializedDefaults += 1;
+          }
+        });
+        if (initializedDefaults > 0) {
+          console.log(
+            `[Cortex] Initialized defaults for ${initializedDefaults} files`
+          );
+        }
+
+        const createdMetadata = metadataStore.ensureMetadataForFiles(
+          files.map((file) => ({
+            relativePath: file.relativePath,
+            extension: file.extension,
+          }))
+        );
+        if (createdMetadata > 0) {
+          console.log(`[Cortex] Created ${createdMetadata} metadata entries`);
+        }
+
+        hydrateMirrorMetadata(files);
+        await verifyMirrorCache(files);
+
+        progress?.report({ message: `Found ${files.length} files` });
+      };
+
+      if (hasCache) {
+        await runWorkspaceScan();
+      } else {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: "Cortex: Scanning workspace...",
+            cancellable: false,
+          },
+          async (progress) => {
+            await runWorkspaceScan(progress);
+          }
+        );
+      }
 
       console.log(`[Cortex] Indexed ${indexStore.getStats().totalFiles} files`);
       updateIndexingStatus({
@@ -1530,6 +2746,36 @@ export async function activate(context: vscode.ExtensionContext) {
         .forEach((file) => filesNeedingDocsMap.set(file.relativePath, file));
       const filesNeedingDocs = Array.from(filesNeedingDocsMap.values());
 
+      const filesNeedingSummaryMap = new Map<string, FileIndexEntry>();
+      currentFiles
+        .filter((file) => !blacklistStore.isBlacklisted(file.relativePath))
+        .forEach((file) => filesNeedingSummaryMap.set(file.relativePath, file));
+      changedFiles
+        .filter((file) => !blacklistStore.isBlacklisted(file.relativePath))
+        .forEach((file) => filesNeedingSummaryMap.set(file.relativePath, file));
+      const filesNeedingSummary = Array.from(
+        filesNeedingSummaryMap.values()
+      );
+
+      const filesNeedingMirrorsMap = new Map<string, FileIndexEntry>();
+      currentFiles
+        .filter(
+          (file) =>
+            mirrorStore.isMirrorableExtension(file.extension) &&
+            !blacklistStore.isBlacklisted(file.relativePath)
+        )
+        .forEach((file) => filesNeedingMirrorsMap.set(file.relativePath, file));
+      changedFiles
+        .filter(
+          (file) =>
+            mirrorStore.isMirrorableExtension(file.extension) &&
+            !blacklistStore.isBlacklisted(file.relativePath)
+        )
+        .forEach((file) => filesNeedingMirrorsMap.set(file.relativePath, file));
+      const filesNeedingMirrors = Array.from(
+        filesNeedingMirrorsMap.values()
+      );
+
       const scheduleIndexingSave = () => scheduleCacheSave(15000);
 
       await startBasicIndexing(
@@ -1628,6 +2874,8 @@ export async function activate(context: vscode.ExtensionContext) {
             workspaceRoot,
             indexStore,
             metadataExtractor,
+            mirrorStore,
+            updateMirrorTracking,
             documentMetricsTreeProvider,
             (patch) => updateIndexingStatus(patch),
             filesNeedingDocs,
@@ -1635,7 +2883,38 @@ export async function activate(context: vscode.ExtensionContext) {
             scheduleIndexingSave
           );
         })(),
+        (async () => {
+          console.log("[Cortex] Starting mirror indexing...");
+          return startMirrorIndexing(
+            mirrorStore,
+            updateMirrorTracking,
+            filesNeedingMirrors,
+            scheduleIndexingSave
+          );
+        })(),
       ]);
+
+      console.log("[Cortex] Starting AI summary indexing...");
+      await startAISummaryIndexing(
+        indexStore,
+        metadataStore,
+        llmService,
+        mirrorStore,
+        workspaceRoot,
+        filesNeedingSummary,
+        scheduleIndexingSave
+      );
+      await startAITagProjectIndexing(
+        indexStore,
+        metadataStore,
+        llmService,
+        mirrorStore,
+        workspaceRoot,
+        filesNeedingSummary,
+        scheduleIndexingSave,
+        true,
+        refreshAllViews
+      );
 
       console.log("[Cortex] ✓ All background indexing complete");
       scheduleCacheSave(0);
@@ -1703,6 +2982,34 @@ export async function activate(context: vscode.ExtensionContext) {
       });
     context.globalState.update("cortex.hasShownWelcome", true);
   }
+
+  // Función helper para actualizar la vista de información del archivo
+  const updateFileInfoView = () => {
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+      const absolutePath = editor.document.uri.fsPath;
+      const relativePath = path.relative(workspaceRoot, absolutePath);
+      
+      // Verificar que el archivo esté en el workspace
+      if (!relativePath.startsWith('..')) {
+        fileInfoTreeProvider.updateCurrentFile(relativePath);
+      } else {
+        fileInfoTreeProvider.updateCurrentFile(null);
+      }
+    } else {
+      fileInfoTreeProvider.updateCurrentFile(null);
+    }
+  };
+
+  // Actualizar la vista cuando cambie el archivo activo
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(() => {
+      updateFileInfoView();
+    })
+  );
+
+  // Inicializar con el archivo actual si hay uno abierto
+  updateFileInfoView();
 }
 
 /**

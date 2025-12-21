@@ -1,0 +1,8 @@
+model,size,avg_time_s,tokens_per_sec,quality,compliance_pct
+llama3.2,2GB,0.41,106.8,Excellent,100
+deepseek-coder,?,0.58,213.2,Excellent,67
+phi3,3.8GB,0.88,95,Excellent,67
+mistral,4.1GB,1.03,52.5,Excellent,100
+qwen2.5,?,1.06,51.6,Excellent,100
+llama3.1,?,1.33,48.6,Excellent,67
+codellama,3.8GB,2.02,49,Excellent,67

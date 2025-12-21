@@ -47,6 +47,7 @@ class ContextTreeItem extends vscode.TreeItem {
 export class ContextTreeProvider
   implements vscode.TreeDataProvider<ContextTreeItem>
 {
+  private static readonly suggestedPrefix = 'suggested:';
   private _onDidChangeTreeData: vscode.EventEmitter<
     ContextTreeItem | undefined | null | void
   > = new vscode.EventEmitter<ContextTreeItem | undefined | null | void>();
@@ -121,8 +122,9 @@ export class ContextTreeProvider
    */
   private getContextNodes(): ContextTreeItem[] {
     const contexts = this.metadataStore.getAllContexts();
+    const suggestedContexts = this.metadataStore.getAllSuggestedContexts();
 
-    if (contexts.length === 0) {
+    if (contexts.length === 0 && suggestedContexts.length === 0) {
       if (this.indexingStatus?.isIndexing) {
         return [this.getIndexingPlaceholder()];
       }
@@ -137,7 +139,7 @@ export class ContextTreeProvider
       return [placeholder];
     }
 
-    return contexts.map((context) => {
+    const items: ContextTreeItem[] = contexts.map((context) => {
       const fileCount = this.metadataStore.getFilesByContext(context).length;
       const label = `${context} (${fileCount})`;
       const isExpanded = this.accordionState.isExpanded(context);
@@ -153,13 +155,50 @@ export class ContextTreeProvider
         context
       );
     });
+
+    const existingContexts = new Set(contexts);
+    suggestedContexts.forEach((context) => {
+      if (existingContexts.has(context)) {
+        return;
+      }
+      const fileCount =
+        this.metadataStore.getFilesBySuggestedContext(context).length;
+      const label = `${context} (${fileCount})`;
+      const key = `${ContextTreeProvider.suggestedPrefix}${context}`;
+      const isExpanded = this.accordionState.isExpanded(key);
+      const collapsibleState = isExpanded
+        ? vscode.TreeItemCollapsibleState.Expanded
+        : vscode.TreeItemCollapsibleState.Collapsed;
+      const item = new ContextTreeItem(
+        label,
+        collapsibleState,
+        undefined,
+        false,
+        key
+      );
+      item.description = 'suggested';
+      item.tooltip =
+        'AI-suggested project. Use "Cortex: Suggest project for current file" to apply.';
+      item.iconPath = new vscode.ThemeIcon('lightbulb');
+      items.push(item);
+    });
+
+    return items;
   }
 
   /**
    * Get files in a specific project
    */
   private getFilesInContext(context: string): ContextTreeItem[] {
-    const relativePaths = this.metadataStore.getFilesByContext(context);
+    const isSuggested = context.startsWith(
+      ContextTreeProvider.suggestedPrefix
+    );
+    const resolvedContext = isSuggested
+      ? context.slice(ContextTreeProvider.suggestedPrefix.length)
+      : context;
+    const relativePaths = isSuggested
+      ? this.metadataStore.getFilesBySuggestedContext(resolvedContext)
+      : this.metadataStore.getFilesByContext(resolvedContext);
 
     return relativePaths.map((relativePath) => {
       const absolutePath = path.join(this.workspaceRoot, relativePath);
@@ -191,6 +230,10 @@ export class ContextTreeProvider
   }
 
   private getRootKeys(): string[] {
-    return this.metadataStore.getAllContexts();
+    const contexts = this.metadataStore.getAllContexts();
+    const suggestedContexts = this.metadataStore.getAllSuggestedContexts().map(
+      (context) => `${ContextTreeProvider.suggestedPrefix}${context}`
+    );
+    return contexts.concat(suggestedContexts);
   }
 }

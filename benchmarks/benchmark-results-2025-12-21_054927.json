@@ -1,0 +1,334 @@
+{
+  "timestamp": "2025-12-21_054927",
+  "results": {
+    "phi3": {
+      "info": {
+        "name": "phi3",
+        "size": "3.8GB",
+        "params": "3.8B",
+        "description": "Very fast, lightweight"
+      },
+      "tests": {
+        "tagSuggestion": {
+          "success": true,
+          "response": "```json\n[\n  \"typescript\",\n  \"authentication\",\n  \"security\",\n  \"token-based\"\n]\n```",
+          "duration": "2.16",
+          "tokensPerSecond": "92.9"
+        },
+        "strictJsonTags": {
+          "success": true,
+          "response": "```json\n\n[\"jwt-signing\", \"jwt-verification\", \"token-expiration\", \"refresh-logic\"]\n\n```\n\nIn this JSON array, I've selected tags that are relevant to the module `src/crypto/jwt.ts`, which appears to handle JWT (JSON Web Tokens) operations such as signing and verifying tokens, managing their expiration times, and possibly providing logic for refreshing them when necessary. The chosen terms reflect these core functionalities without delving into specifics that would require knowledge of the module' end implementation details or code comments.",
+          "duration": "1.62",
+          "tokensPerSecond": "89.2"
+        },
+        "projectSuggestion": {
+          "success": true,
+          "response": "authentication-service-project",
+          "duration": "0.19",
+          "tokensPerSecond": "107.4"
+        },
+        "fileSummary": {
+          "success": true,
+          "response": "\"React User Profile Component with Avatar, Name, Email, Bio.\"",
+          "duration": "0.31",
+          "tokensPerSecond": "96.0"
+        },
+        "streamSummary": {
+          "success": true,
+          "response": "A TagService service calculates recommended tags using AI, checks for correctness on selection, then saves the choices persistently.",
+          "duration": "0.38",
+          "tokensPerSecond": "93.2",
+          "firstTokenMs": 92
+        },
+        "longContextSummary": {
+          "success": true,
+          "response": "A TypeScript class managing metadata storage, retrieval with filters/tags, project assignments, timestamps; supports data migration, persistence to disk, backup import/export.",
+          "duration": "0.63",
+          "tokensPerSecond": "91.2"
+        }
+      }
+    },
+    "llama3.2": {
+      "info": {
+        "name": "llama3.2",
+        "size": "2GB",
+        "params": "3.2B",
+        "description": "Balanced, recommended"
+      },
+      "tests": {
+        "tagSuggestion": {
+          "success": true,
+          "response": "[\"typescript\", \"authentication\", \"api\", \"service\", \"login\"]",
+          "duration": "0.99",
+          "tokensPerSecond": "102.6"
+        },
+        "strictJsonTags": {
+          "success": true,
+          "response": "[\"jwt\", \"crypto\", \"token\", \"authentication\"]",
+          "duration": "0.26",
+          "tokensPerSecond": "105.1"
+        },
+        "projectSuggestion": {
+          "success": true,
+          "response": "auth-management-system",
+          "duration": "0.16",
+          "tokensPerSecond": "127.2"
+        },
+        "fileSummary": {
+          "success": true,
+          "response": "This React component displays user profile information, including avatar, name, email, and bio.",
+          "duration": "0.34",
+          "tokensPerSecond": "102.3"
+        },
+        "streamSummary": {
+          "success": true,
+          "response": "The TagService computes AI-suggested tags, validates user selections, and persists them.",
+          "duration": "0.30",
+          "tokensPerSecond": "102.3",
+          "firstTokenMs": 123
+        },
+        "longContextSummary": {
+          "success": true,
+          "response": "This TypeScript class stores and retrieves metadata for files, supporting various features and persistence to disk.",
+          "duration": "0.40",
+          "tokensPerSecond": "101.2"
+        }
+      }
+    },
+    "mistral": {
+      "info": {
+        "name": "mistral",
+        "size": "4.1GB",
+        "params": "7B",
+        "description": "High quality, medium speed"
+      },
+      "tests": {
+        "tagSuggestion": {
+          "success": true,
+          "response": " [\"typescript\", \"authentication\", \"service\", \"login\", \"token-management\"]",
+          "duration": "2.11",
+          "tokensPerSecond": "51.8"
+        },
+        "strictJsonTags": {
+          "success": true,
+          "response": " [\"jwt\", \"authentication\", \"security\", \"token-management\"]",
+          "duration": "0.57",
+          "tokensPerSecond": "51.6"
+        },
+        "projectSuggestion": {
+          "success": true,
+          "response": " authentication-authorization",
+          "duration": "0.32",
+          "tokensPerSecond": "61.5"
+        },
+        "fileSummary": {
+          "success": true,
+          "response": " Displays user profile info: avatar, name, email, bio using a React component.",
+          "duration": "0.65",
+          "tokensPerSecond": "50.8"
+        },
+        "streamSummary": {
+          "success": true,
+          "response": " The TagService.ts file is a service for generating AI-suggested tags, validating user choices, and storing the selected tags permanently.",
+          "duration": "0.81",
+          "tokensPerSecond": "49.9",
+          "firstTokenMs": 168
+        },
+        "longContextSummary": {
+          "success": true,
+          "response": " The MetadataStore.ts file is a TypeScript class that manages metadata for files, including tags, summaries, project assignments, and more. It uses JSON as the backing store, supports optimistic updates, caching, and version compatibility, and offers functionalities like fuzzy tag search and batch updates.",
+          "duration": "1.72",
+          "tokensPerSecond": "49.6"
+        }
+      }
+    },
+    "codellama": {
+      "info": {
+        "name": "codellama",
+        "size": "3.8GB",
+        "params": "7B",
+        "description": "Optimized for code"
+      },
+      "tests": {
+        "tagSuggestion": {
+          "success": true,
+          "response": "\nThe code provided is a TypeScript class that implements an authentication service. The class has three methods: `login`, `logout`, and `tokenManagement`. The `login` method takes in two parameters, `email` and `password`, and returns a promise that resolves to a user object or null if the login attempt was unsuccessful. The `logout` method does not take any parameters and simply logs out the current user. The `tokenManagement` method is not implemented in this code snippet.\n\nBased on the provided code, here are three relevant tags:\n\n1. Typescript\n2. Authentication\n3. API",
+          "duration": "6.31",
+          "tokensPerSecond": "52.3"
+        },
+        "strictJsonTags": {
+          "success": true,
+          "response": "\nHere is a JSON array of 4 lowercase tags for the module `src/crypto/jwt.ts`:\n\n[\"security\", \"authentication\", \"authorization\", \"token\"]",
+          "duration": "1.16",
+          "tokensPerSecond": "50.0"
+        },
+        "projectSuggestion": {
+          "success": true,
+          "response": "\nProject Name: auth-service",
+          "duration": "0.47",
+          "tokensPerSecond": "44.3"
+        },
+        "fileSummary": {
+          "success": true,
+          "response": "The UserProfile.tsx file is a React component that displays user profile information, including avatar, name, email, and bio.",
+          "duration": "1.02",
+          "tokensPerSecond": "38.9"
+        },
+        "streamSummary": {
+          "success": true,
+          "response": "\nThe TagService is a service that computes AI-suggested tags, validates user selections, and persists them.",
+          "duration": "0.72",
+          "tokensPerSecond": "54.3",
+          "firstTokenMs": 164
+        },
+        "longContextSummary": {
+          "success": true,
+          "response": "The purpose of the MetadataStore class is to provide a centralized repository for storing, retrieving, and managing metadata for files. It supports various features such as tags, summaries, project assignment, filtering based on tags, projects, timestamps, and file paths, and provides an API for importing/exporting metadata for backups. The class uses a JSON file as the backing store, supports optimistic updates and caching, ensures backward compatibility across versions, and provides helper functions for fuzzy tag search and batch updates.",
+          "duration": "2.43",
+          "tokensPerSecond": "54.2"
+        }
+      }
+    },
+    "qwen2.5": {
+      "info": {
+        "name": "qwen2.5",
+        "size": "?",
+        "params": "7B",
+        "description": "Strong instruction following"
+      },
+      "tests": {
+        "tagSuggestion": {
+          "success": true,
+          "response": "[\"typescript\", \"authservice\", \"login\", \"tokenmanagement\"]",
+          "duration": "3.87",
+          "tokensPerSecond": "48.0"
+        },
+        "strictJsonTags": {
+          "success": true,
+          "response": "[\"jwt\", \"signing\", \"verification\", \"expiration\"]",
+          "duration": "0.51",
+          "tokensPerSecond": "48.5"
+        },
+        "projectSuggestion": {
+          "success": true,
+          "response": "auth-service-api",
+          "duration": "0.28",
+          "tokensPerSecond": "58.9"
+        },
+        "fileSummary": {
+          "success": true,
+          "response": "Displays user profile info in React.",
+          "duration": "0.41",
+          "tokensPerSecond": "53.3"
+        },
+        "streamSummary": {
+          "success": true,
+          "response": "TagService computes AI tags, validates user selections, and persists them.",
+          "duration": "0.50",
+          "tokensPerSecond": "51.1",
+          "firstTokenMs": 199
+        },
+        "longContextSummary": {
+          "success": true,
+          "response": "A TypeScript class managing file metadata with query API, persistence, migrations, and backup support.",
+          "duration": "0.80",
+          "tokensPerSecond": "49.7"
+        }
+      }
+    },
+    "llama3.1": {
+      "info": {
+        "name": "llama3.1",
+        "size": "?",
+        "params": "8B",
+        "description": "Larger Llama baseline"
+      },
+      "tests": {
+        "tagSuggestion": {
+          "success": true,
+          "response": "Here are the relevant tags for the given TypeScript code:\n\n```\n[\"typescript\", \"authentication\", \"service\"]\n```",
+          "duration": "4.47",
+          "tokensPerSecond": "46.7"
+        },
+        "strictJsonTags": {
+          "success": true,
+          "response": "Here is the JSON array of 4 lowercase tags for this module:\n\n```\n[\n  \"jwt\",\n  \"signing\",\n  \"verification\",\n  \"token-expiration\"\n]\n```",
+          "duration": "1.16",
+          "tokensPerSecond": "45.4"
+        },
+        "projectSuggestion": {
+          "success": true,
+          "response": "auth-management-system",
+          "duration": "0.30",
+          "tokensPerSecond": "59.3"
+        },
+        "fileSummary": {
+          "success": true,
+          "response": "Displays user profile information in a React component.",
+          "duration": "0.44",
+          "tokensPerSecond": "47.0"
+        },
+        "streamSummary": {
+          "success": true,
+          "response": "The TagService.ts file contains a service for computing and persisting AI-suggested and user-selected tags.",
+          "duration": "0.70",
+          "tokensPerSecond": "46.2",
+          "firstTokenMs": 214
+        },
+        "longContextSummary": {
+          "success": true,
+          "response": "Stores and retrieves metadata for files, supporting tags, summaries, project assignment, and query filtering.",
+          "duration": "0.90",
+          "tokensPerSecond": "47.0"
+        }
+      }
+    },
+    "deepseek-coder": {
+      "info": {
+        "name": "deepseek-coder",
+        "size": "?",
+        "params": "7B",
+        "description": "Code-focused model"
+      },
+      "tests": {
+        "tagSuggestion": {
+          "success": true,
+          "response": "Here are the tags for your TypeScript code analysis based on its functionality and structure: [\"typescript\", \"authservice\", \"loginmethod\"]. This assumes that you want to identify key words in this context, which is a common approach. The exact keywords can vary depending upon how detailed or broadly focused one wants their search terming towards the provided text (e.g., more specific tags for each method).\n",
+          "duration": "1.23",
+          "tokensPerSecond": "208.4"
+        },
+        "strictJsonTags": {
+          "success": true,
+          "response": "Here is a JSON array of four tags for the module \"src/crypto/jwt\". These are based on common practices in software development and may not be strictly necessary, but they can provide context to your code. The actual implementation details would depend heavily on how you're using this JWT functionality:\n\n```json\n[\"tag-one\", \n\"tokenSigningAndVerificationWithJwtInNodejsUsingJsonwebtokenModuleFromNpmByExample1029736548_npmInstallationOfPackageForTestEnvironmentSetupTestsandjwtexamplecomparisonsignatureverifyexampleorgjsonwebencode\", \n\"tag-three\", \n\"tokenExpirationAndRefreshLogicInJwtModule\"]\n```\n",
+          "duration": "0.88",
+          "tokensPerSecond": "207.0"
+        },
+        "projectSuggestion": {
+          "success": true,
+          "response": "Based on your files and their descriptions provided in this context (`src/auth/AuthService.ts` for authentication service `src/auth/TokenService.ts` for token services while referring to model file at `src/models/User.ts`), the project name could be \"user-management\".\n",
+          "duration": "0.37",
+          "tokensPerSecond": "212.3"
+        },
+        "fileSummary": {
+          "success": true,
+          "response": "This File is a User Profile Component in react using TypeScript which shows various details about users such as their Avatar image, Name, Email ID & Bio Information of user profile owner.\n",
+          "duration": "0.24",
+          "tokensPerSecond": "216.2"
+        },
+        "streamSummary": {
+          "success": true,
+          "response": "\"A service for computing AI suggested tags based on the input data.\"\n",
+          "duration": "0.12",
+          "tokensPerSecond": "224.5",
+          "firstTokenMs": 46
+        },
+        "longContextSummary": {
+          "success": true,
+          "response": "The MetadataStore class in src/core directory of TypeScript project is responsible for storing, retrieving metadata (tags, summaries), assigning projects to files, handling file paths based on timestamps. It persists data using a JSON-based backing store while also supporting migrations and providing methods for import / export backups via tags or specific queries in the form of filters such as project assignment & timestamp range etc., with optimistic updates support (ensuring backward compatibility across versions) along side fuzzy tag search functionality.\n",
+          "duration": "0.62",
+          "tokensPerSecond": "210.8"
+        }
+      }
+    }
+  }
+}

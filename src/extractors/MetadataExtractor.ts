@@ -51,6 +51,7 @@ export interface EnhancedMetadata {
     mime?: boolean;
     code?: boolean;
     document?: boolean;
+    mirror?: boolean;
   };
 
   // Deep file analysis
@@ -62,6 +63,14 @@ export interface EnhancedMetadata {
   // Document metadata
   documentMetadata?: DocumentMetadata | SpreadsheetMetadata | PresentationMetadata | PDFMetadata;
   designMetadata?: DesignMetadata;
+
+  // Mirror metadata
+  mirror?: {
+    format: 'md' | 'csv';
+    path: string;
+    sourceMtime: number;
+    updatedAt: number;
+  };
 
   // Error tracking
   error?: {
