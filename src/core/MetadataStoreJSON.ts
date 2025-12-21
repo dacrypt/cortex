@@ -3,11 +3,12 @@
  * Fallback implementation that doesn't require better-sqlite3
  */
 
-import * as path from 'path';
-import * as fs from 'fs/promises';
-import { FileMetadata } from '../models/types';
-import { generateFileId, inferFileType } from '../utils/fileHash';
-import { IMetadataStore } from './IMetadataStore';
+import * as path from "path";
+import * as fs from "fs/promises";
+import { createWriteStream } from "fs";
+import { FileMetadata, MirrorMetadata } from "../models/types";
+import { generateFileId, inferFileType } from "../utils/fileHash";
+import { IMetadataStore } from "./IMetadataStore";
 
 interface JSONStore {
   files: Record<string, FileMetadata>;
@@ -20,10 +21,14 @@ export class MetadataStoreJSON implements IMetadataStore {
   private store: JSONStore;
   private storePath: string;
   private cortexDir: string;
+  private saveTimer?: NodeJS.Timeout;
+  private saveInFlight?: Promise<void>;
+  private saveQueued = false;
+  private static readonly MAX_TEXT_CHARS = 200_000;
 
   constructor(workspaceRoot: string) {
-    this.cortexDir = path.join(workspaceRoot, '.cortex');
-    this.storePath = path.join(this.cortexDir, 'index.json');
+    this.cortexDir = path.join(workspaceRoot, ".cortex");
+    this.storePath = path.join(this.cortexDir, "index.json");
     this.store = {
       files: {},
       tags: {},
@@ -41,10 +46,10 @@ export class MetadataStoreJSON implements IMetadataStore {
 
     // Load existing store if it exists
     try {
-      const data = await fs.readFile(this.storePath, 'utf-8');
+      const data = await fs.readFile(this.storePath, "utf-8");
       this.store = JSON.parse(data);
       console.log(`[MetadataStore] Loaded from ${this.storePath}`);
-    } catch (error) {
+    } catch {
       // File doesn't exist, start fresh
       console.log(`[MetadataStore] Initialized new store at ${this.storePath}`);
       await this.save();
@@ -55,11 +60,152 @@ export class MetadataStoreJSON implements IMetadataStore {
    * Save store to disk
    */
   private async save(): Promise<void> {
-    await fs.writeFile(
-      this.storePath,
-      JSON.stringify(this.store, null, 2),
-      'utf-8'
-    );
+    const stream = createWriteStream(this.storePath, { encoding: "utf8" });
+    let truncated = false;
+
+    const writeChunk = async (chunk: string) => {
+      if (!stream.write(chunk)) {
+        await new Promise<void>((resolve, reject) => {
+          stream.once("drain", resolve);
+          stream.once("error", reject);
+        });
+      }
+    };
+
+    await new Promise<void>((resolve, reject) => {
+      stream.once("error", reject);
+      stream.once("finish", resolve);
+      void (async () => {
+        await writeChunk("{");
+        await writeChunk('"files":{');
+        let first = true;
+        for (const [fileId, metadata] of Object.entries(this.store.files)) {
+          if (!first) {
+            await writeChunk(",");
+          }
+          first = false;
+          await writeChunk(JSON.stringify(fileId));
+          await writeChunk(":");
+          const safeMetadata = this.sanitizeMetadataForSave(metadata, () => {
+            truncated = true;
+          });
+          await writeChunk(JSON.stringify(safeMetadata));
+        }
+        await writeChunk('},"tags":{');
+        first = true;
+        for (const [tag, fileIds] of Object.entries(this.store.tags)) {
+          if (!first) {
+            await writeChunk(",");
+          }
+          first = false;
+          await writeChunk(JSON.stringify(tag));
+          await writeChunk(":");
+          await writeChunk(JSON.stringify(fileIds));
+        }
+        await writeChunk('},"contexts":{');
+        first = true;
+        for (const [context, fileIds] of Object.entries(this.store.contexts)) {
+          if (!first) {
+            await writeChunk(",");
+          }
+          first = false;
+          await writeChunk(JSON.stringify(context));
+          await writeChunk(":");
+          await writeChunk(JSON.stringify(fileIds));
+        }
+        await writeChunk('},"types":{');
+        first = true;
+        for (const [type, fileIds] of Object.entries(this.store.types)) {
+          if (!first) {
+            await writeChunk(",");
+          }
+          first = false;
+          await writeChunk(JSON.stringify(type));
+          await writeChunk(":");
+          await writeChunk(JSON.stringify(fileIds));
+        }
+        await writeChunk("}}");
+        stream.end();
+      })().catch(reject);
+    });
+    if (truncated) {
+      console.warn(
+        `[MetadataStore] Truncated large text fields while saving ${this.storePath}`
+      );
+    }
+  }
+
+  private sanitizeMetadataForSave(
+    metadata: FileMetadata,
+    onTruncate: () => void
+  ): FileMetadata {
+    const maxChars = MetadataStoreJSON.MAX_TEXT_CHARS;
+    let needsClone = false;
+
+    const sanitizeText = (value?: string): string | undefined => {
+      if (!value || value.length <= maxChars) {
+        return value;
+      }
+      onTruncate();
+      return `${value.slice(0, maxChars)} [truncated]`;
+    };
+
+    const notes = sanitizeText(metadata.notes);
+    if (notes !== metadata.notes) {
+      needsClone = true;
+    }
+
+    const aiSummary = sanitizeText(metadata.aiSummary);
+    if (aiSummary !== metadata.aiSummary) {
+      needsClone = true;
+    }
+
+    if (!needsClone) {
+      return metadata;
+    }
+
+    return {
+      ...metadata,
+      notes,
+      aiSummary,
+    };
+  }
+
+  private scheduleSave(delayMs = 500): void {
+    this.saveQueued = true;
+    if (this.saveTimer) {
+      return;
+    }
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = undefined;
+      void this.flushSave();
+    }, delayMs);
+  }
+
+  private async flushSave(): Promise<void> {
+    if (this.saveInFlight) {
+      try {
+        await this.saveInFlight;
+      } catch (error) {
+        console.error("[MetadataStore] Failed to save store:", error);
+      }
+      if (this.saveQueued) {
+        await this.flushSave();
+      }
+      return;
+    }
+    this.saveQueued = false;
+    this.saveInFlight = this.save();
+    try {
+      await this.saveInFlight;
+    } catch (error) {
+      console.error("[MetadataStore] Failed to save store:", error);
+    } finally {
+      this.saveInFlight = undefined;
+    }
+    if (this.saveQueued) {
+      await this.flushSave();
+    }
   }
 
   /**
@@ -97,7 +243,7 @@ export class MetadataStoreJSON implements IMetadataStore {
       this.store.types[type].push(fileId);
     }
 
-    this.save();
+    this.scheduleSave();
     return metadata;
   }
 
@@ -142,7 +288,7 @@ export class MetadataStoreJSON implements IMetadataStore {
     }
 
     if (created > 0) {
-      this.save();
+      this.scheduleSave();
     }
 
     return created;
@@ -186,7 +332,7 @@ export class MetadataStoreJSON implements IMetadataStore {
     }
 
     metadata.updated_at = Date.now();
-    this.save();
+    this.scheduleSave();
   }
 
   /**
@@ -210,7 +356,7 @@ export class MetadataStoreJSON implements IMetadataStore {
     }
 
     metadata.updated_at = Date.now();
-    this.save();
+    this.scheduleSave();
   }
 
   /**
@@ -236,7 +382,7 @@ export class MetadataStoreJSON implements IMetadataStore {
     }
 
     metadata.updated_at = Date.now();
-    this.save();
+    this.scheduleSave();
   }
 
   /**
@@ -259,7 +405,7 @@ export class MetadataStoreJSON implements IMetadataStore {
     }
 
     metadata.updated_at = Date.now();
-    this.save();
+    this.scheduleSave();
   }
 
   /**
@@ -275,7 +421,7 @@ export class MetadataStoreJSON implements IMetadataStore {
 
     metadata.suggestedContexts = [];
     metadata.updated_at = Date.now();
-    this.save();
+    this.scheduleSave();
   }
 
   /**
@@ -310,7 +456,7 @@ export class MetadataStoreJSON implements IMetadataStore {
     }
 
     metadata.updated_at = Date.now();
-    this.save();
+    this.scheduleSave();
   }
 
   /**
@@ -326,7 +472,63 @@ export class MetadataStoreJSON implements IMetadataStore {
 
     metadata.notes = notes;
     metadata.updated_at = Date.now();
-    this.save();
+    this.scheduleSave();
+  }
+
+  /**
+   * Update cached AI summary data for a file
+   */
+  updateAISummary(
+    relativePath: string,
+    summary: string,
+    summaryHash: string,
+    keyTerms?: string[]
+  ): void {
+    const fileId = generateFileId(relativePath);
+    const metadata = this.store.files[fileId];
+
+    if (!metadata) {
+      return;
+    }
+
+    metadata.aiSummary = summary;
+    metadata.aiSummaryHash = summaryHash;
+    metadata.aiKeyTerms =
+      keyTerms && keyTerms.length > 0 ? keyTerms : undefined;
+    metadata.updated_at = Date.now();
+    this.scheduleSave();
+  }
+
+  /**
+   * Update cached mirror metadata for a file
+   */
+  updateMirrorMetadata(relativePath: string, mirror: MirrorMetadata): void {
+    const fileId = generateFileId(relativePath);
+    const metadata = this.store.files[fileId];
+
+    if (!metadata) {
+      return;
+    }
+
+    metadata.mirror = mirror;
+    metadata.updated_at = Date.now();
+    this.scheduleSave();
+  }
+
+  /**
+   * Clear cached mirror metadata for a file
+   */
+  clearMirrorMetadata(relativePath: string): void {
+    const fileId = generateFileId(relativePath);
+    const metadata = this.store.files[fileId];
+
+    if (!metadata) {
+      return;
+    }
+
+    delete metadata.mirror;
+    metadata.updated_at = Date.now();
+    this.scheduleSave();
   }
 
   /**
@@ -350,6 +552,19 @@ export class MetadataStoreJSON implements IMetadataStore {
   }
 
   /**
+   * Get all files with a specific suggested context
+   */
+  getFilesBySuggestedContext(context: string): string[] {
+    const results: string[] = [];
+    for (const metadata of Object.values(this.store.files)) {
+      if (metadata.suggestedContexts?.includes(context)) {
+        results.push(metadata.relativePath);
+      }
+    }
+    return results;
+  }
+
+  /**
    * Get all files of a specific type
    */
   getFilesByType(type: string): string[] {
@@ -367,10 +582,34 @@ export class MetadataStoreJSON implements IMetadataStore {
   }
 
   /**
+   * Get tag counts for all tags
+   */
+  getTagCounts(): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const [tag, fileIds] of Object.entries(this.store.tags)) {
+      counts.set(tag, fileIds.length);
+    }
+    return counts;
+  }
+
+  /**
    * Get all unique contexts
    */
   getAllContexts(): string[] {
     return Object.keys(this.store.contexts).sort();
+  }
+
+  /**
+   * Get all unique suggested contexts
+   */
+  getAllSuggestedContexts(): string[] {
+    const contexts = new Set<string>();
+    for (const metadata of Object.values(this.store.files)) {
+      for (const context of metadata.suggestedContexts ?? []) {
+        contexts.add(context);
+      }
+    }
+    return Array.from(contexts).sort();
   }
 
   /**
@@ -385,5 +624,36 @@ export class MetadataStoreJSON implements IMetadataStore {
    */
   close(): void {
     // Nothing to close for JSON
+  }
+
+  /**
+   * Remove file metadata and indexes
+   */
+  removeFile(relativePath: string): void {
+    const fileId = generateFileId(relativePath);
+    const metadata = this.store.files[fileId];
+
+    if (!metadata) {
+      return;
+    }
+
+    delete this.store.files[fileId];
+
+    const removeFromIndex = (index: Record<string, string[]>) => {
+      for (const key of Object.keys(index)) {
+        const updated = index[key].filter((id) => id !== fileId);
+        if (updated.length === 0) {
+          delete index[key];
+        } else {
+          index[key] = updated;
+        }
+      }
+    };
+
+    removeFromIndex(this.store.tags);
+    removeFromIndex(this.store.contexts);
+    removeFromIndex(this.store.types);
+
+    this.scheduleSave();
   }
 }

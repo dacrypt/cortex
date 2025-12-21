@@ -29,7 +29,7 @@ Three tree views in the Activity Bar:
 
 ### 3. Local-First Architecture
 
-- All metadata stored in `.cortex/index.sqlite`
+- All metadata stored in `.cortex/index.sqlite` (falls back to `.cortex/index.json` if SQLite is unavailable)
 - No cloud, no AI, no required external dependencies
 - Fast startup and indexing
 - Deterministic behavior
@@ -48,6 +48,14 @@ Three tree views in the Activity Bar:
    ```
 
 4. Press `F5` in VS Code to launch Extension Development Host
+
+## Troubleshooting
+
+If you see a message about missing `better-sqlite3` bindings, rebuild the native module:
+
+```bash
+npm rebuild better-sqlite3
+```
 
 ## Usage
 

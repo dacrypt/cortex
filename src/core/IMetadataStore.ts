@@ -3,7 +3,7 @@
  * Allows different implementations (SQLite, JSON, etc.)
  */
 
-import { FileMetadata } from '../models/types';
+import { FileMetadata, MirrorMetadata } from '../models/types';
 
 export interface IMetadataStore {
   initialize(): Promise<void>;
@@ -17,12 +17,27 @@ export interface IMetadataStore {
   addSuggestedContext(relativePath: string, context: string): void;
   clearSuggestedContexts(relativePath: string): void;
   getSuggestedContexts(relativePath: string): string[];
+  getFilesBySuggestedContext(context: string): string[];
   updateNotes(relativePath: string, notes: string): void;
+  updateAISummary(
+    relativePath: string,
+    summary: string,
+    summaryHash: string,
+    keyTerms?: string[]
+  ): void;
+  ensureMetadataForFiles(
+    files: Array<{ relativePath: string; extension: string }>
+  ): number;
+  updateMirrorMetadata(relativePath: string, mirror: MirrorMetadata): void;
+  clearMirrorMetadata(relativePath: string): void;
+  removeFile(relativePath: string): void;
   getFilesByTag(tag: string): string[];
   getFilesByContext(context: string): string[];
   getFilesByType(type: string): string[];
   getAllTags(): string[];
+  getTagCounts(): Map<string, number>;
   getAllContexts(): string[];
+  getAllSuggestedContexts(): string[];
   getAllTypes(): string[];
   close(): void;
 }

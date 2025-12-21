@@ -66,7 +66,16 @@ Alternatively, add to your `settings.json`:
   "cortex.llm.enabled": true,
   "cortex.llm.endpoint": "http://localhost:11434",
   "cortex.llm.model": "llama3.2",
-  "cortex.llm.maxContextTokens": 2000
+  "cortex.llm.maxContextTokens": 2000,
+  "cortex.llm.autoSummary.enabled": false,
+  "cortex.llm.autoSummary.maxFileSize": 250000,
+  "cortex.llm.autoSummary.maxConcurrency": 2,
+  "cortex.llm.autoIndex.enabled": false,
+  "cortex.llm.autoIndex.applyTags": false,
+  "cortex.llm.autoIndex.applyProjects": false,
+  "cortex.llm.autoIndex.useSuggestedContexts": true,
+  "cortex.llm.autoIndex.maxFileSize": 250000,
+  "cortex.llm.autoIndex.maxConcurrency": 2
 }
 ```
 
@@ -128,6 +137,15 @@ Summary: "Handles user authentication using JWT tokens and validates credentials
 | `cortex.llm.endpoint` | `http://localhost:11434` | LLM API endpoint |
 | `cortex.llm.model` | `llama3.2` | Model to use |
 | `cortex.llm.maxContextTokens` | `2000` | Max characters to send as context |
+| `cortex.llm.autoSummary.enabled` | `false` | Auto-generate cached summaries during indexing |
+| `cortex.llm.autoSummary.maxFileSize` | `250000` | Max file size (bytes) to summarize |
+| `cortex.llm.autoSummary.maxConcurrency` | `2` | Concurrent summary requests during indexing |
+| `cortex.llm.autoIndex.enabled` | `false` | Auto-generate AI tags/projects during indexing |
+| `cortex.llm.autoIndex.applyTags` | `false` | Apply AI tags automatically |
+| `cortex.llm.autoIndex.applyProjects` | `false` | Apply AI project suggestions automatically |
+| `cortex.llm.autoIndex.useSuggestedContexts` | `true` | Store projects as suggestions instead of assigning |
+| `cortex.llm.autoIndex.maxFileSize` | `250000` | Max file size (bytes) for tags/projects |
+| `cortex.llm.autoIndex.maxConcurrency` | `2` | Concurrent tag/project requests during indexing |
 
 ## Using Other LLM Services
 
@@ -196,6 +214,7 @@ ollama serve
 2. **Pre-load models** - First request downloads the model
 3. **Use appropriate models** - Smaller = faster
 4. **Adjust context size** - Less context = faster responses
+5. **Use auto-summary carefully** - Lower file size and concurrency for faster indexing
 
 ## Example Workflow
 

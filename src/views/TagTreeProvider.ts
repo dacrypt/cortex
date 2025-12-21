@@ -104,21 +104,11 @@ export class TagTreeProvider
   private getTagNodes(): TagTreeItem[] {
     const tags = this.metadataStore.getAllTags();
 
-    if (tags.length === 0) {
-      if (this.indexingStatus?.isIndexing) {
-        return [this.getIndexingPlaceholder()];
-      }
-      const placeholder = new TagTreeItem(
-        'No tags yet',
-        vscode.TreeItemCollapsibleState.None
-      );
-      placeholder.iconPath = new vscode.ThemeIcon('info');
-      placeholder.tooltip = 'Use "Cortex: Add tag to current file" to create tags';
-      return [placeholder];
-    }
+    // Get all tag counts in a single query for better performance
+    const tagCounts = this.metadataStore.getTagCounts();
 
-    return tags.map((tag) => {
-      const fileCount = this.metadataStore.getFilesByTag(tag).length;
+    const tagItems = tags.map((tag) => {
+      const fileCount = tagCounts.get(tag) || 0;
       const label = `${tag} (${fileCount})`;
       const isExpanded = this.accordionState.isExpanded(tag);
       const collapsibleState = isExpanded
@@ -133,6 +123,24 @@ export class TagTreeProvider
         tag
       );
     });
+
+    // If indexing and no tags yet, show placeholder
+    if (tags.length === 0) {
+      if (this.indexingStatus?.isIndexing) {
+        return [this.getIndexingPlaceholder()];
+      }
+      const placeholder = new TagTreeItem(
+        'No tags yet',
+        vscode.TreeItemCollapsibleState.None
+      );
+      placeholder.iconPath = new vscode.ThemeIcon('info');
+      placeholder.tooltip = 'Use "Cortex: Add tag to current file" to create tags';
+      return [placeholder];
+    }
+
+    // If indexing and we have tags, show tags (they will update as indexing progresses)
+    // The indexing status is shown in the view message, not as a placeholder
+    return tagItems;
   }
 
   private getFilesWithTag(tag: string): TagTreeItem[] {

@@ -4,6 +4,13 @@
 
 import { EnhancedMetadata } from '../extractors/MetadataExtractor';
 
+export interface MirrorMetadata {
+  format: 'md' | 'csv';
+  path: string;
+  sourceMtime: number;
+  updatedAt: number;
+}
+
 /**
  * In-memory index entry for a workspace file
  */
@@ -28,6 +35,10 @@ export interface FileMetadata {
   suggestedContexts?: string[]; // Suggested projects (not yet confirmed)
   type: string; // Inferred from extension (ts, pdf, md, etc.)
   notes?: string;
+  aiSummary?: string;
+  aiSummaryHash?: string;
+  aiKeyTerms?: string[];
+  mirror?: MirrorMetadata;
   created_at: number; // Unix timestamp
   updated_at: number; // Unix timestamp
 }

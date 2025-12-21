@@ -19,5 +19,14 @@
   "cortex.llm.enabled": true,
   "cortex.llm.endpoint": "http://localhost:11434",
   "cortex.llm.model": "llama3.2",
-  "cortex.llm.maxContextTokens": 2000
+  "cortex.llm.maxContextTokens": 2000,
+  "cortex.llm.autoSummary.enabled": true,
+  "cortex.llm.autoSummary.maxFileSize": 250000,
+  "cortex.llm.autoSummary.maxConcurrency": 2,
+  "cortex.llm.autoIndex.enabled": true,
+  "cortex.llm.autoIndex.applyTags": false,
+  "cortex.llm.autoIndex.applyProjects": true,
+  "cortex.llm.autoIndex.useSuggestedContexts": true,
+  "cortex.llm.autoIndex.maxFileSize": 250000,
+  "cortex.llm.autoIndex.maxConcurrency": 2
 }
