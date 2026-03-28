@@ -1,6 +1,6 @@
 # Cortex
 
-A contextual understanding layer for your file system. Cortex indexes, extracts, and embeds every file in your workspace — code, documents, images, spreadsheets, PDFs — into a semantic vector space. AI agents can then query this space through MCP to understand your files, not just search them.
+A contextual understanding layer for your file system. Cortex indexes, extracts, and embeds every file in your workspace — documents, images, spreadsheets, PDFs, audio, video — into a semantic vector space. AI agents can then query this space through MCP to understand your files, not just search them.
 
 ## The Problem
 
@@ -10,8 +10,8 @@ Your file system is a flat list of bytes. AI agents that need to work with your 
 
 Cortex sits between your files and AI agents. It:
 
-1. **Extracts** content from every file type — PDFs, DOCX, XLSX, images, code, audio, video
-2. **Indexes** deep metadata — not just filenames, but content structure, code complexity, document authors, EXIF data, MIME types
+1. **Extracts** content from every file type — PDFs, DOCX, XLSX, PPTX, images, audio, video
+2. **Indexes** deep metadata — not just filenames, but content structure, document authors, EXIF data, MIME types, named entities
 3. **Embeds** everything into a vector space using local embedding models
 4. **Locates** each file precisely in semantic space based on its full context — content, metadata, relationships, usage patterns
 5. **Serves** this understanding to AI agents via gRPC (MCP-ready)
@@ -23,7 +23,7 @@ Your Files (any type)
   │
   ▼
 Cortex Pipeline
-  ├── Extract: text from PDFs, Office docs, images (OCR), code analysis
+  ├── Extract: text from PDFs, Office docs, images (OCR), audio (transcription)
   ├── Analyze: metadata, structure, relationships, entities
   ├── Embed: vector representations via local models
   ├── Classify: AI-generated tags, projects, categories, summaries
@@ -34,8 +34,8 @@ Semantic Vector Space (SQLite + embeddings)
   │
   ▼
 gRPC API / MCP Server
-  ├── Semantic search: "files about authentication"
-  ├── RAG queries: "summarize the API contracts"
+  ├── Semantic search: "files about network configuration"
+  ├── RAG queries: "summarize the Q3 financial reports"
   ├── Contextual retrieval: related files, clusters, knowledge graph
   └── Structured metadata: tags, projects, states, relationships
 ```
@@ -92,13 +92,12 @@ Every file passes through a pipeline that extracts progressively deeper understa
 |-------|-----------------|
 | `basic` | Size, timestamps, hashes (MD5, SHA-256), path structure |
 | `mime` | True MIME type via magic bytes (not just extension) |
-| `mirror` | Full text content from PDFs, DOCX, XLSX, PPTX, legacy Office formats |
-| `code` | Lines of code, complexity, imports, exports, functions, classes |
-| `document` | Markdown parsing, chunking, heading structure, word/page counts |
+| `mirror` | Full text from PDFs, DOCX, XLSX, PPTX, legacy Office; OCR for scanned docs |
+| `document` | Parsing, chunking, heading structure, word/page counts |
 | `metadata` | Author, title, creation date, EXIF, IPTC, XMP, OS-level attributes |
-| `relationship` | Cross-file references, imports, dependencies |
+| `relationship` | Cross-document references and dependencies |
 | `state` | Document lifecycle: draft, active, replaced, archived |
-| `enrichment` | Named entities, sentiment, citations, tables, formulas |
+| `enrichment` | Named entities, sentiment, citations, tables, transcription (Whisper) |
 | `embedding` | Vector representation via `nomic-embed-text` for semantic search |
 | `ai` | LLM-generated tags, project assignments, summaries, categories |
 | `clustering` | Semantic clusters via embedding similarity, temporal co-occurrence |
@@ -113,9 +112,9 @@ After indexing, every file has a rich vector representation that captures its fu
 Ask natural language questions and get answers with source citations:
 
 ```
-"Which files discuss the payment integration?"
-"Summarize the architecture decisions in this project"
-"What contracts are related to the Q3 report?"
+"Which documents discuss the supplier agreement?"
+"Summarize the financial reports from Q3"
+"What contracts are related to the Acme project?"
 ```
 
 The RAG system retrieves relevant document chunks by embedding similarity, then generates an answer using the LLM with the retrieved context.
@@ -136,8 +135,9 @@ Every file has extractable structured data:
 - Project assignments (manual + AI-inferred)
 - AI summaries
 - Document state (draft/active/replaced/archived)
-- Code metrics (LOC, complexity, functions)
 - Document metrics (pages, words, author)
+- Image metadata (EXIF, GPS, camera, dimensions)
+- Audio/video metadata (duration, bitrate, codec, ID3 tags)
 - Hierarchical categories (AI-generated taxonomy)
 
 ## gRPC API
@@ -245,7 +245,7 @@ Then Claude Code can query your document knowledge graph directly:
 
 The extension provides a visual interface to browse the semantic space:
 
-- **Faceted views** — by project, tag, type, date, size, folder, content type, metrics
+- **Faceted views** — by project, tag, type, date, size, folder, content type
 - **Taxonomy tree** — AI-generated hierarchical categories
 - **Admin dashboard** — backend status, pipeline progress, configuration
 - **Cluster graph** — visual representation of document relationships
@@ -348,8 +348,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development guide.
 
 ## Roadmap
 
-- **MCP Server** — expose Cortex as a Model Context Protocol server for any AI agent
-- **Image understanding** — extract visual content, not just EXIF metadata
+- **Image understanding** — visual content analysis via LLM vision models, not just EXIF metadata
 - **Multi-workspace** — index across multiple directories and projects
 - **Graph visualization** — interactive knowledge graph in the browser
 - **Plugin system** — custom extractors and pipeline stages
