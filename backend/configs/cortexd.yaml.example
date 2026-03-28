@@ -1,32 +1,32 @@
 # Cortex Daemon Configuration
-# Template de configuración con todas las capacidades AI habilitadas
-# Copia este archivo a cortexd.yaml y personaliza según necesites
+# Copy this file to cortexd.local.yaml and customize as needed.
+# cortexd.local.yaml is gitignored.
 
 # Server settings
 grpc_address: "localhost:50051"
 http_address: "localhost:8080"
 
 # Storage settings
-data_dir: "../tmp/cortex-data"
-plugin_dir: "../tmp/cortex-data/plugins"
+data_dir: "./cortex-data"
+plugin_dir: "./cortex-data/plugins"
 
 # Worker settings
 worker_count: 4
 max_concurrent_tasks: 10
 
-# Logging settings
+# Logging
 log_level: "info"  # debug, info, warn, error
 # log_file: /var/log/cortex/cortexd.log
 
-# Mirror extraction settings
+# Mirror extraction (text from PDFs, Office docs)
 mirror:
   max_file_size_mb: 25
 
-# Watch paths (optional)
+# Directories to index and watch for changes
 watch_paths:
-  - "../test-workspace"
+  - "/path/to/your/workspace"
 
-# LLM settings - TODAS LAS CAPACIDADES AI HABILITADAS
+# LLM settings (all AI features enabled by default)
 llm:
   enabled: true
   default_provider: "ollama"
@@ -34,41 +34,38 @@ llm:
   max_context_tokens: 2000
   request_timeout_ms: 30000
 
-  # Auto Summary - Generación automática de resúmenes
+  # Auto-generate summaries for indexed files
   auto_summary:
     enabled: true
-    max_file_size: 250000  # 250KB - 0 = sin límite
+    max_file_size: 250000  # bytes, 0 = no limit
 
-  # Auto Index - Indexación automática con AI
+  # Auto-generate tags and project suggestions
   auto_index:
     enabled: true
-    # Aplicar automáticamente tags y proyectos sugeridos
     apply_tags: true
     apply_projects: true
     use_suggested_contexts: true
-    max_file_size: 250000  # 250KB - 0 = sin límite
+    max_file_size: 250000
     max_tags: 5
-    # Clasificación de categorías
     enable_categories: true
-    # Archivos relacionados
     enable_related: true
     max_related_results: 10
     related_candidates: 100
-    # RAG (Retrieval Augmented Generation) - TODAS HABILITADAS
-    use_rag_for_categories: true   # Usar RAG para clasificar categorías
-    use_rag_for_tags: true         # Usar RAG para sugerir tags
-    use_rag_for_projects: true     # Usar RAG para sugerir proyectos
-    use_rag_for_related: true      # Usar búsqueda semántica para archivos relacionados
-    use_rag_for_summary: true      # Usar RAG para mejorar resúmenes
-    rag_similarity_threshold: 0.5  # Umbral de similitud para RAG (0.0-1.0)
+    # Use RAG to improve AI suggestions
+    use_rag_for_categories: true
+    use_rag_for_tags: true
+    use_rag_for_projects: true
+    use_rag_for_related: true
+    use_rag_for_summary: true
+    rag_similarity_threshold: 0.5  # 0.0-1.0
 
-  # Embeddings settings (para RAG)
+  # Embedding model for RAG / semantic search
   embeddings:
     enabled: true
     endpoint: "http://localhost:11434"
-    model: "nomic-embed-text"  # Modelo de embeddings de Ollama
+    model: "nomic-embed-text"
 
-  # LLM Providers
+  # LLM providers
   providers:
     - id: "ollama"
       type: "ollama"
@@ -78,14 +75,25 @@ llm:
       type: "openai"
       endpoint: "http://localhost:1234/v1"
 
-    # Descomentar para usar OpenAI API
+    # Uncomment to use OpenAI API
     # - id: "openai"
     #   type: "openai"
     #   endpoint: "https://api.openai.com/v1"
     #   api_key: "${OPENAI_API_KEY}"
 
-    # Descomentar para usar Anthropic API
+    # Uncomment to use Anthropic API
     # - id: "anthropic"
     #   type: "anthropic"
     #   endpoint: "https://api.anthropic.com"
     #   api_key: "${ANTHROPIC_API_KEY}"
+
+# Apache Tika (document metadata extraction)
+# Requires Java if manage_process is true
+tika:
+  enabled: false
+  manage_process: true
+  auto_download: true
+  endpoint: "http://localhost:9998"
+  port: 9998
+  timeout: 30s
+  max_file_size: 104857600  # 100 MB
