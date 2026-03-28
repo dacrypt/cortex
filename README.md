@@ -157,6 +157,90 @@ The backend exposes 8 gRPC services (defined in [`backend/api/proto/cortex/v1/`]
 
 See the [backend README](backend/README.md) for the full API reference with every method documented.
 
+## MCP Server (AI Agent Interface)
+
+Cortex can run as an [MCP](https://modelcontextprotocol.io/) server, giving AI coding agents (Claude Code, Copilot, Cursor) structured access to the knowledge graph. Instead of reading entire files, agents query documents, projects, and relationships with token-efficient tool calls.
+
+```bash
+cortexd --mcp --config cortexd.yaml
+```
+
+### Tools
+
+| Tool | Purpose | Example |
+|------|---------|---------|
+| `cortex_find` | Search documents, projects, or files | `{"kind": "document", "state": "active", "tag": "review"}` |
+| `cortex_show` | Inspect metadata, outline, or content | `{"target": "architecture.md", "view": "outline"}` |
+| `cortex_relations` | Navigate the knowledge graph | `{"target": "api-spec.md", "type": "depends_on"}` |
+
+### `cortex_find` — Search the knowledge graph
+
+```json
+// Find active documents tagged "review"
+{"kind": "document", "state": "active", "tag": "review"}
+
+// Find software projects
+{"kind": "project", "nature": "development.software"}
+
+// Semantic search (RAG-powered)
+{"kind": "document", "query": "network VPN configuration"}
+
+// Find PDF files
+{"kind": "file", "extension": ".pdf", "limit": 10}
+```
+
+### `cortex_show` — Inspect a document or project
+
+```json
+// Document metadata (title, state, tags, projects, AI summary)
+{"target": "meeting-notes.md", "view": "signature"}
+
+// Document outline (heading structure)
+{"target": "architecture.pdf", "view": "outline"}
+
+// Project members (assigned documents)
+{"target": "Nexus Platform", "view": "members"}
+
+// Full file metadata (tags, contexts, language, AI category)
+{"target": "invoice.xlsx", "view": "metadata"}
+```
+
+### `cortex_relations` — Navigate relationships
+
+```json
+// What does this document depend on?
+{"target": "api-spec.md", "direction": "outgoing", "type": "depends_on"}
+
+// What references this template?
+{"target": "template.md", "direction": "incoming", "type": "references"}
+
+// Find shortest path between two documents
+{"target": "doc-a.md", "path_to": "doc-b.md"}
+```
+
+### Integration with Claude Code
+
+Add to your Claude Code settings (`~/.claude/settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "cortex": {
+      "command": "/path/to/cortexd",
+      "args": ["--mcp", "--config", "/path/to/cortexd.yaml"]
+    }
+  }
+}
+```
+
+Then Claude Code can query your document knowledge graph directly:
+
+> "What documents do I have about network configuration?" -> `cortex_find` with semantic search
+>
+> "Show me the outline of the architecture document" -> `cortex_show` with outline view
+>
+> "What depends on the API spec?" -> `cortex_relations` with depends_on traversal
+
 ## VS Code Extension
 
 The extension provides a visual interface to browse the semantic space:

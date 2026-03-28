@@ -23,6 +23,7 @@ import (
 	"github.com/dacrypt/cortex/backend/internal/application/pipeline/stages"
 	"github.com/dacrypt/cortex/backend/internal/application/project"
 	"github.com/dacrypt/cortex/backend/internal/application/rag"
+	"github.com/dacrypt/cortex/backend/internal/domain/entity"
 	"github.com/dacrypt/cortex/backend/internal/domain/event"
 	"github.com/dacrypt/cortex/backend/internal/domain/service"
 	"github.com/dacrypt/cortex/backend/internal/infrastructure/config"
@@ -38,6 +39,7 @@ import (
 	"github.com/dacrypt/cortex/backend/internal/interfaces/grpc/adapters"
 	"github.com/dacrypt/cortex/backend/internal/interfaces/grpc/handlers"
 	httpserver "github.com/dacrypt/cortex/backend/internal/interfaces/http"
+	mcpserver "github.com/dacrypt/cortex/backend/internal/interfaces/mcp"
 )
 
 // Version information (set by build)
@@ -111,9 +113,9 @@ type handlerInitConfig struct {
 }
 
 func main() {
-	configPath := parseFlagsAndShowVersion()
+	flags := parseFlagsAndShowVersion()
 
-	cfg, logger := loadConfigAndSetupLogging(*configPath)
+	cfg, logger := loadConfigAndSetupLogging(flags.configPath)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -180,7 +182,7 @@ func main() {
 
 	handlerCfg := &handlerInitConfig{
 		cfg:              cfg,
-		configPath:       *configPath,
+		configPath:       flags.configPath,
 		repos:            repos,
 		orchestrator:     orchestrator,
 		publisher:        publisher,
@@ -204,6 +206,30 @@ func main() {
 
 	aiStage := createAIStage(cfg, llmRouter, repos, projectService, ragEmbedder, logger)
 	orchestrator.AddStage(aiStage)
+
+	// MCP mode: serve as MCP server on stdio for AI agents
+	if flags.mcpMode {
+		// Determine default workspace ID from watch_paths config
+		var defaultWsID entity.WorkspaceID
+		if len(cfg.WatchPaths) > 0 {
+			defaultWsID = entity.WorkspaceID(cfg.WatchPaths[0])
+		}
+
+		mcpSrv := mcpserver.NewServer(mcpserver.Config{
+			KnowledgeHandler: appHandlers.knowledgeHandler,
+			FileHandler:      appHandlers.fileHandler,
+			MetadataHandler:  appHandlers.metadataHandler,
+			RAGHandler:       appHandlers.ragGrpcHandler,
+			DefaultWorkspace: defaultWsID,
+			Logger:           logger,
+		})
+
+		logger.Info().Msg("Starting Cortex in MCP server mode (stdio)")
+		if err := mcpSrv.ServeStdio(); err != nil {
+			logger.Fatal().Err(err).Msg("MCP server error")
+		}
+		return
+	}
 
 	appAdapters := initializeAdapters(appHandlers, repos.fileRepo, logger)
 
@@ -232,9 +258,15 @@ func main() {
 	waitForShutdown(server, httpSrv, db, watchers, tikaManager, logger)
 }
 
-func parseFlagsAndShowVersion() *string {
+type cliFlags struct {
+	configPath string
+	mcpMode    bool
+}
+
+func parseFlagsAndShowVersion() cliFlags {
 	configPath := flag.String("config", "", "Path to configuration file")
 	showVersion := flag.Bool("version", false, "Show version information")
+	mcpMode := flag.Bool("mcp", false, "Run as MCP server on stdio (for AI agents)")
 	flag.Parse()
 
 	if *showVersion {
@@ -246,7 +278,10 @@ func parseFlagsAndShowVersion() *string {
 		os.Exit(0)
 	}
 
-	return configPath
+	return cliFlags{
+		configPath: *configPath,
+		mcpMode:    *mcpMode,
+	}
 }
 
 func loadConfigAndSetupLogging(configPath string) (*config.Config, zerolog.Logger) {
