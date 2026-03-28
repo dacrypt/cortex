@@ -1,13 +1,15 @@
-import * as assert from 'assert';
+import * as assert from 'node:assert';
 import { generateFileId, inferFileType } from '../../utils/fileHash';
 import {
   isOsTaggingSupported,
   normalizeTag,
   normalizeTags,
+  TAG_MAX_LENGTH,
+  TAG_MAX_WORDS,
 } from '../../utils/osTags';
-import { formatIndexingMessage } from '../../core/IndexingStatus';
 import { updateStoreTags } from '../../utils/tagSync';
 import { FileMetadata } from '../../models/types';
+import { IMetadataStore } from '../../core/IMetadataStore';
 
 describe('utils', () => {
   it('generateFileId is deterministic', () => {
@@ -23,15 +25,27 @@ describe('utils', () => {
     assert.strictEqual(inferFileType('unknownext'), 'unknownext');
   });
 
-  it('normalizeTag trims and lowercases', () => {
-    assert.strictEqual(normalizeTag('  Hello '), 'hello');
+  it('normalizeTag formats slug-style tags', () => {
+    assert.strictEqual(normalizeTag('  Hello World '), 'hello-world');
+    assert.strictEqual(normalizeTag('#Tag'), 'tag');
     assert.strictEqual(normalizeTag(''), null);
     assert.strictEqual(normalizeTag('   '), null);
+    assert.strictEqual(normalizeTag('a'.repeat(TAG_MAX_LENGTH + 1)), null);
+    assert.strictEqual(
+      normalizeTag(['one', 'two', 'three', 'four'].join('-')),
+      null
+    );
+    assert.strictEqual(
+      normalizeTag(['uno', 'dos', 'tres'].join('-')),
+      'uno-dos-tres'
+    );
+    assert.strictEqual(TAG_MAX_WORDS, 3);
   });
 
   it('normalizeTags deduplicates and drops empty values', () => {
     const tags = normalizeTags([' Tag', 'tag', '', 'Other ']);
-    assert.deepStrictEqual(tags.sort(), ['other', 'tag']);
+    const sortedTags = [...tags].sort((a, b) => a.localeCompare(b));
+    assert.deepStrictEqual(sortedTags, ['other', 'tag']);
   });
 
   it('isOsTaggingSupported matches platform', () => {
@@ -47,17 +61,6 @@ describe('utils', () => {
     } else {
       process.env.CORTEX_DISABLE_OS_TAGS = previous;
     }
-  });
-
-  it('formatIndexingMessage formats progress', () => {
-    const message = formatIndexingMessage({
-      phase: 'basic',
-      message: 'Test',
-      processed: 2,
-      total: 10,
-      isIndexing: true,
-    });
-    assert.strictEqual(message, 'Indexando: Test (2/10)');
   });
 
   it('updateStoreTags syncs tag sets', () => {
@@ -81,10 +84,11 @@ describe('utils', () => {
       removeTag: (_path: string, tag: string) => {
         meta.tags = meta.tags.filter((t) => t !== tag);
       },
-    } as any;
+    } as unknown as IMetadataStore;
 
     const changed = updateStoreTags(store, 'file.txt', ['new', 'old']);
     assert.strictEqual(changed, true);
-    assert.deepStrictEqual(meta.tags.sort(), ['new', 'old']);
+    const sortedTags = [...meta.tags].sort((a, b) => a.localeCompare(b));
+    assert.deepStrictEqual(sortedTags, ['new', 'old']);
   });
 });

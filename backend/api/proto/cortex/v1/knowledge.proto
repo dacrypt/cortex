@@ -1,0 +1,628 @@
+syntax = "proto3";
+
+package cortex.v1;
+
+option go_package = "github.com/dacrypt/cortex/backend/api/gen/cortex/v1;cortexv1";
+
+import "cortex/v1/common.proto";
+
+// KnowledgeService handles knowledge engine operations (projects, relationships, states, usage, queries)
+service KnowledgeService {
+  // Project operations
+  rpc CreateProject(CreateProjectRequest) returns (Project);
+  rpc GetProject(GetProjectRequest) returns (Project);
+  rpc UpdateProject(UpdateProjectRequest) returns (Project);
+  rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResult);
+  rpc ListProjects(ListProjectsRequest) returns (stream Project);
+  rpc GetProjectChildren(GetProjectChildrenRequest) returns (stream Project);
+  rpc GetProjectParents(GetProjectParentsRequest) returns (stream Project);
+  rpc AddDocumentToProject(AddDocumentToProjectRequest) returns (AddDocumentToProjectResult);
+  rpc RemoveDocumentFromProject(RemoveDocumentFromProjectRequest) returns (RemoveDocumentFromProjectResult);
+  rpc GetProjectsForDocument(GetProjectsForDocumentRequest) returns (stream DocumentID);
+  rpc ListProjectAssignmentsByFile(ListProjectAssignmentsByFileRequest) returns (stream ProjectAssignment);
+  rpc ListProjectAssignmentsByProject(ListProjectAssignmentsByProjectRequest) returns (stream ProjectAssignment);
+  rpc UpdateProjectAssignmentStatus(UpdateProjectAssignmentStatusRequest) returns (ProjectAssignment);
+
+  // Poly-hierarchy operations (documents in multiple projects with roles)
+  rpc GetAllProjectMembershipsForDocument(GetAllProjectMembershipsRequest) returns (stream DocumentProjectMembership);
+  rpc UpdateDocumentProjectRole(UpdateDocumentProjectRoleRequest) returns (DocumentProjectMembership);
+
+  // Relationship operations
+  rpc AddDocumentRelationship(AddDocumentRelationshipRequest) returns (DocumentRelationship);
+  rpc RemoveDocumentRelationship(RemoveDocumentRelationshipRequest) returns (RemoveRelationshipResult);
+  rpc GetDocumentRelationships(GetDocumentRelationshipsRequest) returns (stream DocumentRelationship);
+  rpc GetRelatedDocuments(GetRelatedDocumentsRequest) returns (stream DocumentID);
+  rpc TraverseRelationships(TraverseRelationshipsRequest) returns (stream DocumentID);
+  rpc FindPath(FindPathRequest) returns (PathResult);
+
+  rpc AddProjectRelationship(AddProjectRelationshipRequest) returns (ProjectRelationship);
+  rpc RemoveProjectRelationship(RemoveProjectRelationshipRequest) returns (RemoveRelationshipResult);
+  rpc GetProjectRelationships(GetProjectRelationshipsRequest) returns (stream ProjectRelationship);
+
+  // Document state operations
+  rpc SetDocumentState(SetDocumentStateRequest) returns (DocumentStateEntry);
+  rpc GetDocumentState(GetDocumentStateRequest) returns (DocumentStateEntry);
+  rpc GetDocumentStateHistory(GetDocumentStateHistoryRequest) returns (stream DocumentStateEntry);
+  rpc ListDocumentsByState(ListDocumentsByStateRequest) returns (stream DocumentID);
+
+  // Usage analytics
+  rpc RecordUsage(RecordUsageRequest) returns (RecordUsageResult);
+  rpc GetUsageStats(GetUsageStatsRequest) returns (UsageStats);
+  rpc GetCoOccurringDocuments(GetCoOccurringDocumentsRequest) returns (stream DocumentID);
+  rpc GetFrequentlyUsedDocuments(GetFrequentlyUsedDocumentsRequest) returns (stream DocumentID);
+  rpc GetRecentlyUsedDocuments(GetRecentlyUsedDocumentsRequest) returns (stream DocumentID);
+  rpc GetKnowledgeClusters(GetKnowledgeClustersRequest) returns (KnowledgeClusters);
+
+  // Query operations
+  rpc QueryDocuments(QueryDocumentsRequest) returns (stream DocumentInfo);
+  rpc QueryProjects(QueryProjectsRequest) returns (stream Project);
+
+  // Faceting operations
+  rpc GetFacets(GetFacetsRequest) returns (FacetResults);
+
+  // Visualization operations
+  rpc GenerateGraph(GenerateGraphRequest) returns (GraphData);
+  rpc GenerateHeatmap(GenerateHeatmapRequest) returns (HeatmapData);
+  rpc GenerateNodes(GenerateNodesRequest) returns (stream GraphNode);
+}
+
+// Project represents a logical grouping of documents
+message Project {
+  string id = 1;
+  string workspace_id = 2;
+  string name = 3;
+  optional string description = 4;
+  string nature = 8;  // Project nature/type (e.g., "writing.book", "development.software")
+  optional string attributes = 9;  // JSON string with project attributes
+  optional string parent_id = 5;
+  int64 created_at = 6;
+  int64 updated_at = 7;
+}
+
+// ProjectAssignment represents a scored assignment between a file and a project.
+message ProjectAssignment {
+  string workspace_id = 1;
+  string file_id = 2;
+  optional string project_id = 3;
+  string project_name = 4;
+  double score = 5;
+  repeated string sources = 6;
+  ProjectAssignmentStatus status = 7;
+  int64 created_at = 8;
+  int64 updated_at = 9;
+}
+
+// ProjectAssignmentStatus represents the assignment state.
+enum ProjectAssignmentStatus {
+  PROJECT_ASSIGNMENT_STATUS_UNSPECIFIED = 0;
+  PROJECT_ASSIGNMENT_STATUS_AUTO = 1;
+  PROJECT_ASSIGNMENT_STATUS_SUGGESTED = 2;
+  PROJECT_ASSIGNMENT_STATUS_REJECTED = 3;
+  PROJECT_ASSIGNMENT_STATUS_MANUAL = 4;
+}
+
+// DocumentRelationship represents a relationship between documents
+message DocumentRelationship {
+  string from_document_id = 1;
+  string to_document_id = 2;
+  RelationshipType type = 3;
+  optional string description = 4;
+  double strength = 5;
+  int64 created_at = 6;
+  map<string, string> metadata = 7;
+}
+
+// ProjectRelationship represents a relationship between projects
+message ProjectRelationship {
+  string from_project_id = 1;
+  string to_project_id = 2;
+  RelationshipType type = 3;
+  optional string description = 4;
+  int64 created_at = 5;
+}
+
+// RelationshipType enumerates relationship types
+enum RelationshipType {
+  RELATIONSHIP_TYPE_UNSPECIFIED = 0;
+  RELATIONSHIP_TYPE_REPLACES = 1;
+  RELATIONSHIP_TYPE_DEPENDS_ON = 2;
+  RELATIONSHIP_TYPE_BELONGS_TO = 3;
+  RELATIONSHIP_TYPE_REFERENCES = 4;
+  RELATIONSHIP_TYPE_PARENT_OF = 5;
+}
+
+// DocumentState represents document lifecycle state
+enum DocumentState {
+  DOCUMENT_STATE_UNSPECIFIED = 0;
+  DOCUMENT_STATE_DRAFT = 1;
+  DOCUMENT_STATE_ACTIVE = 2;
+  DOCUMENT_STATE_REPLACED = 3;
+  DOCUMENT_STATE_ARCHIVED = 4;
+}
+
+// DocumentStateEntry records a document's state
+message DocumentStateEntry {
+  string document_id = 1;
+  DocumentState state = 2;
+  optional string reason = 3;
+  int64 changed_at = 4;
+  optional string changed_by = 5;
+  optional string replaces_doc_id = 6;
+}
+
+// UsageEventType enumerates usage event types
+enum UsageEventType {
+  USAGE_EVENT_TYPE_UNSPECIFIED = 0;
+  USAGE_EVENT_TYPE_OPENED = 1;
+  USAGE_EVENT_TYPE_EDITED = 2;
+  USAGE_EVENT_TYPE_SEARCHED = 3;
+  USAGE_EVENT_TYPE_REFERENCED = 4;
+  USAGE_EVENT_TYPE_INDEXED = 5;
+}
+
+// UsageStats contains usage statistics
+message UsageStats {
+  string document_id = 1;
+  int32 total_events = 2;
+  map<string, int32> events_by_type = 3;
+  double frequency_per_day = 4;
+  int64 last_used_at = 5;
+  int64 first_used_at = 6;
+}
+
+// KnowledgeClusters contains knowledge cluster information (temporal co-occurrence)
+message KnowledgeClusters {
+  map<string, TemporalDocumentCluster> clusters = 1;
+}
+
+// TemporalDocumentCluster contains documents grouped by temporal co-occurrence
+message TemporalDocumentCluster {
+  string root_document_id = 1;
+  repeated string document_ids = 2;
+  int32 size = 3;
+}
+
+// Project requests
+message CreateProjectRequest {
+  string workspace_id = 1;
+  string name = 2;
+  optional string description = 3;
+  optional string parent_id = 4;
+  optional string nature = 5;  // Project nature/type (defaults to "generic")
+  optional string attributes = 6;  // JSON string with project attributes
+}
+
+message GetProjectRequest {
+  string workspace_id = 1;
+  string project_id = 2;
+}
+
+message UpdateProjectRequest {
+  string workspace_id = 1;
+  string project_id = 2;
+  optional string name = 3;
+  optional string description = 4;
+  optional string parent_id = 5;
+  optional string nature = 6;  // Project nature/type
+  optional string attributes = 7;  // JSON string with project attributes
+}
+
+message DeleteProjectRequest {
+  string workspace_id = 1;
+  string project_id = 2;
+}
+
+message ListProjectsRequest {
+  string workspace_id = 1;
+  optional string parent_id = 2;
+}
+
+message GetProjectChildrenRequest {
+  string workspace_id = 1;
+  string project_id = 2;
+}
+
+message GetProjectParentsRequest {
+  string workspace_id = 1;
+  string project_id = 2;
+}
+
+// DocumentProjectRole defines the role of a document within a project
+enum DocumentProjectRole {
+  DOCUMENT_PROJECT_ROLE_UNSPECIFIED = 0;
+  DOCUMENT_PROJECT_ROLE_PRIMARY = 1;    // Primary document for the project
+  DOCUMENT_PROJECT_ROLE_RELATED = 2;    // Related/reference document
+  DOCUMENT_PROJECT_ROLE_ARCHIVE = 3;    // Archived document
+}
+
+message AddDocumentToProjectRequest {
+  string workspace_id = 1;
+  string project_id = 2;
+  string document_id = 3;
+  DocumentProjectRole role = 4;  // Role of the document in the project (defaults to PRIMARY)
+}
+
+message AddDocumentToProjectResult {
+  bool success = 1;
+}
+
+// DocumentProjectMembership represents a document's membership in a project with role
+message DocumentProjectMembership {
+  string workspace_id = 1;
+  string project_id = 2;
+  string project_name = 3;
+  string document_id = 4;
+  DocumentProjectRole role = 5;
+  double score = 6;              // Assignment confidence score
+  int64 added_at = 7;
+}
+
+message RemoveDocumentFromProjectRequest {
+  string workspace_id = 1;
+  string project_id = 2;
+  string document_id = 3;
+}
+
+message RemoveDocumentFromProjectResult {
+  bool success = 1;
+}
+
+message GetProjectsForDocumentRequest {
+  string workspace_id = 1;
+  string document_id = 2;
+}
+
+message ListProjectAssignmentsByFileRequest {
+  string workspace_id = 1;
+  string file_id = 2;
+}
+
+message ListProjectAssignmentsByProjectRequest {
+  string workspace_id = 1;
+  string project_id = 2;
+}
+
+message UpdateProjectAssignmentStatusRequest {
+  string workspace_id = 1;
+  string file_id = 2;
+  string project_name = 3;
+  ProjectAssignmentStatus status = 4;
+}
+
+// Poly-hierarchy requests
+message GetAllProjectMembershipsRequest {
+  string workspace_id = 1;
+  string document_id = 2;
+  bool include_archived = 3;  // Include archived project memberships
+}
+
+message UpdateDocumentProjectRoleRequest {
+  string workspace_id = 1;
+  string project_id = 2;
+  string document_id = 3;
+  DocumentProjectRole role = 4;
+}
+
+// Relationship requests
+message AddDocumentRelationshipRequest {
+  string workspace_id = 1;
+  string from_document_id = 2;
+  string to_document_id = 3;
+  RelationshipType type = 4;
+  optional string description = 5;
+  optional double strength = 6;
+  map<string, string> metadata = 7;
+}
+
+message RemoveDocumentRelationshipRequest {
+  string workspace_id = 1;
+  string from_document_id = 2;
+  string to_document_id = 3;
+  RelationshipType type = 4;
+}
+
+message GetDocumentRelationshipsRequest {
+  string workspace_id = 1;
+  string document_id = 2;
+  optional RelationshipType type = 3;
+}
+
+message GetRelatedDocumentsRequest {
+  string workspace_id = 1;
+  string document_id = 2;
+  optional RelationshipType type = 3;
+}
+
+message TraverseRelationshipsRequest {
+  string workspace_id = 1;
+  string document_id = 2;
+  RelationshipType type = 3;
+  int32 max_depth = 4;
+}
+
+message FindPathRequest {
+  string workspace_id = 1;
+  string from_document_id = 2;
+  string to_document_id = 3;
+  int32 max_depth = 4;
+}
+
+message PathResult {
+  repeated string document_ids = 1;
+  bool found = 2;
+}
+
+message AddProjectRelationshipRequest {
+  string workspace_id = 1;
+  string from_project_id = 2;
+  string to_project_id = 3;
+  RelationshipType type = 4;
+  optional string description = 5;
+}
+
+message RemoveProjectRelationshipRequest {
+  string workspace_id = 1;
+  string from_project_id = 2;
+  string to_project_id = 3;
+  RelationshipType type = 4;
+}
+
+message GetProjectRelationshipsRequest {
+  string workspace_id = 1;
+  string project_id = 2;
+  optional RelationshipType type = 3;
+}
+
+// State requests
+message SetDocumentStateRequest {
+  string workspace_id = 1;
+  string document_id = 2;
+  DocumentState state = 3;
+  optional string reason = 4;
+  optional string changed_by = 5;
+}
+
+message GetDocumentStateRequest {
+  string workspace_id = 1;
+  string document_id = 2;
+}
+
+message GetDocumentStateHistoryRequest {
+  string workspace_id = 1;
+  string document_id = 2;
+}
+
+message ListDocumentsByStateRequest {
+  string workspace_id = 1;
+  DocumentState state = 2;
+}
+
+// Usage requests
+message RecordUsageRequest {
+  string workspace_id = 1;
+  string document_id = 2;
+  UsageEventType event_type = 3;
+  optional string context = 4;
+}
+
+message GetUsageStatsRequest {
+  string workspace_id = 1;
+  string document_id = 2;
+  optional int64 since_unix = 3;
+}
+
+message GetCoOccurringDocumentsRequest {
+  string workspace_id = 1;
+  string document_id = 2;
+  int32 limit = 3;
+  optional int64 since_unix = 4;
+}
+
+message GetFrequentlyUsedDocumentsRequest {
+  string workspace_id = 1;
+  int32 limit = 2;
+  optional int64 since_unix = 3;
+}
+
+message GetRecentlyUsedDocumentsRequest {
+  string workspace_id = 1;
+  int32 limit = 2;
+}
+
+message GetKnowledgeClustersRequest {
+  string workspace_id = 1;
+  int32 min_cluster_size = 2;
+  optional int64 since_unix = 3;
+}
+
+// Query requests
+message QueryDocumentsRequest {
+  string workspace_id = 1;
+  repeated QueryFilter filters = 2;
+  optional QueryOrdering ordering = 3;
+  optional int32 limit = 4;
+  optional int32 offset = 5;
+}
+
+message QueryFilter {
+  oneof filter {
+    ProjectFilter project = 1;
+    StateFilter state = 2;
+    RelationshipFilter relationship = 3;
+    TemporalFilter temporal = 4;
+  }
+}
+
+message ProjectFilter {
+  string project_id = 1;
+  bool include_subprojects = 2;
+}
+
+message StateFilter {
+  repeated DocumentState states = 1;
+}
+
+message RelationshipFilter {
+  string from_document_id = 1;
+  RelationshipType type = 2;
+  int32 max_depth = 3;
+}
+
+message TemporalFilter {
+  int64 since_unix = 1;
+  UsageEventType event_type = 2;
+  int32 limit = 3;
+}
+
+message QueryOrdering {
+  string field = 1;
+  bool descending = 2;
+}
+
+message QueryProjectsRequest {
+  string workspace_id = 1;
+  optional string parent_id = 2;
+  optional QueryOrdering ordering = 3;
+  optional int32 limit = 4;
+  optional int32 offset = 5;
+}
+
+// Common result types
+message DocumentID {
+  string id = 1;
+}
+
+message DeleteProjectResult {
+  bool success = 1;
+}
+
+message RemoveRelationshipResult {
+  bool success = 1;
+}
+
+message RecordUsageResult {
+  bool success = 1;
+}
+
+// Visualization requests
+message GenerateGraphRequest {
+  string workspace_id = 1;
+  optional string project_id = 2;
+  bool include_documents = 3;
+  bool include_relationships = 4;
+}
+
+message GraphData {
+  repeated GraphNode nodes = 1;
+  repeated GraphEdge edges = 2;
+  map<string, string> metadata = 3;
+}
+
+message GraphNode {
+  string id = 1;
+  string type = 2; // "document", "project"
+  string label = 3;
+  map<string, string> metadata = 4;
+}
+
+message GraphEdge {
+  string from = 1;
+  string to = 2;
+  string type = 3; // "relationship", "belongs_to", "parent_of"
+  double weight = 4;
+  map<string, string> metadata = 5;
+}
+
+message GenerateHeatmapRequest {
+  string workspace_id = 1;
+  int64 since_timestamp = 2; // Unix milliseconds
+  optional string event_type = 3;
+}
+
+message HeatmapData {
+  repeated DocumentInfo documents = 1;
+  repeated HeatmapRow matrix = 2;
+  int64 start_timestamp = 3;
+  int64 end_timestamp = 4;
+}
+
+message HeatmapRow {
+  repeated double values = 1;
+}
+
+message DocumentInfo {
+  string id = 1;
+  string path = 2;
+  string title = 3;
+}
+
+message GenerateNodesRequest {
+  string workspace_id = 1;
+  optional string project_id = 2;
+  repeated DocumentState document_states = 3;
+  optional int32 min_usage_count = 4;
+}
+
+// Faceting requests
+message GetFacetsRequest {
+  string workspace_id = 1;
+  repeated FacetRequest facets = 2;
+  repeated QueryFilter filters = 3; // Optional filters to apply before faceting
+}
+
+message FacetRequest {
+  string field = 1; // Field to facet on (e.g., "extension", "tag", "file_size", "last_modified")
+  FacetType type = 2;
+}
+
+enum FacetType {
+  FACET_TYPE_UNSPECIFIED = 0;
+  FACET_TYPE_TERMS = 1;         // Count distinct values
+  FACET_TYPE_NUMERIC_RANGE = 2; // Count within numeric ranges
+  FACET_TYPE_DATE_RANGE = 3;     // Count within date ranges
+}
+
+message FacetResults {
+  repeated FacetResult results = 1;
+}
+
+message FacetResult {
+  string field = 1;
+  FacetType type = 2;
+  oneof data {
+    TermsFacetData terms = 3;
+    NumericRangeFacetData numeric_range = 4;
+    DateRangeFacetData date_range = 5;
+  }
+}
+
+message TermsFacetData {
+  repeated TermCount terms = 1;
+}
+
+message TermCount {
+  string term = 1;
+  int32 count = 2;
+}
+
+message NumericRangeFacetData {
+  repeated NumericRangeCount ranges = 1;
+}
+
+message NumericRangeCount {
+  string label = 1;
+  double min = 2;
+  double max = 3;
+  int32 count = 4;
+}
+
+message DateRangeFacetData {
+  repeated DateRangeCount ranges = 1;
+}
+
+message DateRangeCount {
+  string label = 1;
+  int64 start_unix = 2; // Unix milliseconds
+  int64 end_unix = 3;   // Unix milliseconds (0 for unbounded)
+  int32 count = 4;
+}

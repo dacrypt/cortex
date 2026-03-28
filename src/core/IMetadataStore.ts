@@ -5,8 +5,11 @@
 
 import { FileMetadata, MirrorMetadata } from '../models/types';
 
+export type RefreshHandler = () => void;
+
 export interface IMetadataStore {
   initialize(): Promise<void>;
+  setRefreshHandler(handler: RefreshHandler): void;
   getOrCreateMetadata(relativePath: string, extension: string): FileMetadata;
   getMetadata(fileId: string): FileMetadata | null;
   getMetadataByPath(relativePath: string): FileMetadata | null;

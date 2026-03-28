@@ -1,22 +1,4 @@
 {
-  "editor.formatOnSave": true,
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "typescript.tsdk": "node_modules/typescript/lib",
-  "typescript.enablePromptUseWorkspaceTsdk": true,
-  "files.exclude": {
-    "out": false,
-    "dist": true,
-    "**/.git": true,
-    "**/.DS_Store": true,
-    "**/node_modules": true
-  },
-  "search.exclude": {
-    "out": true,
-    "dist": true,
-    "**/node_modules": true
-  },
-  "typescript.tsc.autoDetect": "on",
-  "cortex.llm.enabled": true,
   "cortex.llm.endpoint": "http://localhost:11434",
   "cortex.llm.model": "llama3.2",
   "cortex.llm.maxContextTokens": 2000,
@@ -24,7 +6,7 @@
   "cortex.llm.autoSummary.maxFileSize": 250000,
   "cortex.llm.autoSummary.maxConcurrency": 2,
   "cortex.llm.autoIndex.enabled": true,
-  "cortex.llm.autoIndex.applyTags": false,
+  "cortex.llm.autoIndex.applyTags": true,
   "cortex.llm.autoIndex.applyProjects": true,
   "cortex.llm.autoIndex.useSuggestedContexts": true,
   "cortex.llm.autoIndex.maxFileSize": 250000,

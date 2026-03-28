@@ -1,0 +1,175 @@
+syntax = "proto3";
+
+package cortex.v1;
+
+option go_package = "github.com/dacrypt/cortex/backend/api/gen/cortex/v1;cortexv1";
+
+// EntityService provides unified access to files, folders, and projects as entities
+service EntityService {
+  // GetEntity retrieves a single entity by ID
+  rpc GetEntity(GetEntityRequest) returns (Entity);
+
+  // ListEntities lists entities with filters
+  rpc ListEntities(ListEntitiesRequest) returns (ListEntitiesResponse);
+
+  // GetEntitiesByFacet retrieves entities matching a facet value
+  rpc GetEntitiesByFacet(GetEntitiesByFacetRequest) returns (ListEntitiesResponse);
+
+  // UpdateEntityMetadata updates semantic metadata for an entity
+  rpc UpdateEntityMetadata(UpdateEntityMetadataRequest) returns (Entity);
+
+  // CountEntitiesByFacet counts entities matching a facet value
+  rpc CountEntitiesByFacet(CountEntitiesByFacetRequest) returns (CountEntitiesByFacetResponse);
+}
+
+// EntityType represents the type of entity
+enum EntityType {
+  ENTITY_TYPE_UNSPECIFIED = 0;
+  ENTITY_TYPE_FILE = 1;
+  ENTITY_TYPE_FOLDER = 2;
+  ENTITY_TYPE_PROJECT = 3;
+}
+
+// EntityID uniquely identifies an entity
+message EntityID {
+  EntityType type = 1;
+  string id = 2;
+}
+
+// Entity represents a unified view of files, folders, and projects
+message Entity {
+  EntityID id = 1;
+  EntityType type = 2;
+  string workspace_id = 3;
+
+  // Basic information
+  string name = 4;
+  string path = 5;
+  optional string description = 6;
+
+  // Timestamps
+  int64 created_at = 7;
+  int64 updated_at = 8;
+  optional int64 modified_at = 9;
+
+  // Size
+  optional int64 size = 10;
+
+  // Semantic metadata (unified - can be filtered by facets)
+  repeated string tags = 11;
+  repeated string projects = 12;
+  optional string language = 13;
+  optional string category = 14;
+  optional string author = 15;
+  optional string owner = 16;
+  optional string location = 17;
+  optional int32 publication_year = 18;
+
+  // Quality metrics
+  optional double complexity = 19;
+  optional int32 lines_of_code = 20;
+  optional double quality_score = 21;
+
+  // Status
+  optional string status = 22;
+  optional string priority = 23;
+  optional string visibility = 24;
+
+  // AI metadata
+  optional string ai_summary = 25;
+  repeated string ai_keywords = 26;
+
+  // Type-specific data (JSON encoded)
+  optional string file_data = 27;    // JSON: FileEntityData
+  optional string folder_data = 28;   // JSON: FolderEntityData
+  optional string project_data = 29;  // JSON: ProjectEntityData
+}
+
+// GetEntityRequest requests a single entity
+message GetEntityRequest {
+  string workspace_id = 1;
+  EntityID id = 2;
+}
+
+// ListEntitiesRequest requests a list of entities with filters
+message ListEntitiesRequest {
+  string workspace_id = 1;
+  repeated EntityType types = 2;
+  repeated string tags = 3;
+  repeated string projects = 4;
+  optional string language = 5;
+  optional string category = 6;
+  optional string author = 7;
+  optional string owner = 8;
+  optional string location = 9;
+  optional int32 publication_year = 10;
+  optional string status = 11;
+  optional string priority = 12;
+  optional string visibility = 13;
+  optional double complexity_min = 14;
+  optional double complexity_max = 15;
+  optional int64 size_min = 16;
+  optional int64 size_max = 17;
+  optional int64 created_after = 18;
+  optional int64 created_before = 19;
+  optional int64 updated_after = 20;
+  optional int64 updated_before = 21;
+  int32 limit = 22;
+  int32 offset = 23;
+}
+
+// ListEntitiesResponse returns a list of entities
+message ListEntitiesResponse {
+  repeated Entity entities = 1;
+  int32 total = 2;
+  bool has_more = 3;
+}
+
+// GetEntitiesByFacetRequest requests entities matching a facet value
+message GetEntitiesByFacetRequest {
+  string workspace_id = 1;
+  string facet = 2;  // Field name (e.g., "tag", "language", "category")
+  string value = 3;   // Value to match
+  repeated EntityType types = 4;  // Which entity types to include
+  int32 limit = 5;
+  int32 offset = 6;
+}
+
+// UpdateEntityMetadataRequest updates entity metadata
+message UpdateEntityMetadataRequest {
+  string workspace_id = 1;
+  EntityID id = 2;
+  EntityMetadata metadata = 3;
+}
+
+// EntityMetadata contains semantic metadata that can be updated
+message EntityMetadata {
+  repeated string tags = 1;
+  repeated string projects = 2;
+  optional string language = 3;
+  optional string category = 4;
+  optional string author = 5;
+  optional string owner = 6;
+  optional string location = 7;
+  optional int32 publication_year = 8;
+  optional string status = 9;
+  optional string priority = 10;
+  optional string visibility = 11;
+  optional string ai_summary = 12;
+  repeated string ai_keywords = 13;
+  optional string description = 14;
+}
+
+// CountEntitiesByFacetRequest counts entities matching a facet value
+message CountEntitiesByFacetRequest {
+  string workspace_id = 1;
+  string facet = 2;
+  string value = 3;
+  repeated EntityType types = 4;
+}
+
+// CountEntitiesByFacetResponse returns the count
+message CountEntitiesByFacetResponse {
+  int32 count = 1;
+}
+

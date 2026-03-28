@@ -5,3 +5,27 @@ dist
 .vscode-test
 .cortex
 .claude/settings.local.json
+
+# Compiled Go binaries
+tmp/
+*.exe
+backend/cortexd
+backend/diagnose-consistency
+backend/handlers.test
+backend/migrate-contexts
+backend/cmd/cortexd/cortexd
+backend/cmd/diagnose-consistency/diagnose-consistency
+backend/cmd/migrate-contexts/migrate-contexts
+
+# IDE
+.cursor/
+.DS_Store
+
+# Logs
+*.log
+
+# Test workspace (contains personal test data)
+test-workspace/
+
+# Backend local config
+*.local.yaml

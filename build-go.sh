@@ -47,3 +47,11 @@ echo "✓ Binaries compiled successfully in $OUTPUT_DIR/:"
 ls -lh $OUTPUT_DIR/
 
 
+
+
+
+
+
+
+
+

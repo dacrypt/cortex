@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package cortex.v1;
+
+option go_package = "github.com/dacrypt/cortex/backend/api/gen/cortex/v1;cortexv1";
+
+// RAGService provides retrieval-augmented generation capabilities.
+service RAGService {
+  // Query performs a semantic search and returns relevant context.
+  rpc Query(RAGQueryRequest) returns (RAGQueryResponse);
+
+  // SemanticSearch finds similar content without generating an answer.
+  rpc SemanticSearch(SemanticSearchRequest) returns (SemanticSearchResponse);
+
+  // GetIndexStats returns statistics about the RAG index.
+  rpc GetIndexStats(GetIndexStatsRequest) returns (GetIndexStatsResponse);
+}
+
+// RAGQueryRequest contains parameters for a RAG query.
+message RAGQueryRequest {
+  string workspace_id = 1;
+  string query = 2;
+  int32 top_k = 3;
+  float min_similarity = 4;
+}
+
+// RAGQueryResponse contains the query results.
+message RAGQueryResponse {
+  string answer = 1;
+  repeated RAGSource sources = 2;
+}
+
+// RAGSource represents a retrieved document chunk.
+message RAGSource {
+  string document_id = 1;
+  string chunk_id = 2;
+  string relative_path = 3;
+  string heading_path = 4;
+  string snippet = 5;
+  float score = 6;
+}
+
+// SemanticSearchRequest contains parameters for semantic search.
+message SemanticSearchRequest {
+  string workspace_id = 1;
+  string query = 2;
+  int32 top_k = 3;
+  float min_similarity = 4;
+}
+
+// SemanticSearchResponse contains search results.
+message SemanticSearchResponse {
+  repeated RAGSource results = 1;
+}
+
+// GetIndexStatsRequest requests index statistics.
+message GetIndexStatsRequest {
+  string workspace_id = 1;
+}
+
+// GetIndexStatsResponse contains index statistics.
+message GetIndexStatsResponse {
+  int64 total_documents = 1;
+  int64 total_chunks = 2;
+  int64 total_embeddings = 3;
+  string embedding_model = 4;
+}

@@ -1,0 +1,627 @@
+syntax = "proto3";
+
+package cortex.v1;
+
+option go_package = "github.com/dacrypt/cortex/backend/api/gen/cortex/v1;cortexv1";
+
+import "cortex/v1/common.proto";
+
+// FileService handles file indexing and querying operations
+service FileService {
+  // Workspace operations
+  rpc ScanWorkspace(ScanWorkspaceRequest) returns (stream ScanProgress);
+  rpc GetWorkspaceStats(GetWorkspaceStatsRequest) returns (WorkspaceStats);
+
+  // File operations
+  rpc GetFile(GetFileRequest) returns (FileEntry);
+  rpc ListFiles(ListFilesRequest) returns (stream FileEntry);
+  rpc SearchFiles(SearchFilesRequest) returns (stream FileEntry);
+  rpc WatchFiles(WatchFilesRequest) returns (stream FileEvent);
+  rpc ProcessFile(ProcessFileRequest) returns (FileEntry);
+
+  // Grouping queries
+  rpc ListByType(ListByTypeRequest) returns (stream FileEntry);
+  rpc ListByFolder(ListByFolderRequest) returns (stream FileEntry);
+  rpc ListByDate(ListByDateRequest) returns (stream FileEntry);
+  rpc ListBySize(ListBySizeRequest) returns (stream FileEntry);
+  rpc ListByContentType(ListByContentTypeRequest) returns (stream FileEntry);
+}
+
+// FileEntry represents a file in the workspace index
+message FileEntry {
+  string file_id = 1;
+  string relative_path = 2;
+  string absolute_path = 3;
+  string filename = 4;
+  string extension = 5;
+  int64 file_size = 6;
+  int64 last_modified = 7;
+  int64 created_at = 8;
+  EnhancedMetadata enhanced = 9;
+}
+
+// EnhancedMetadata contains rich metadata extracted from files
+message EnhancedMetadata {
+  FileStats stats = 1;
+  string folder = 2;
+  int32 depth = 3;
+  optional string language = 4;
+  optional double language_confidence = 5;
+  optional MimeTypeInfo mime_type = 6;
+  optional CodeMetrics code_metrics = 7;
+  optional DocumentMetrics document_metrics = 8;
+  optional ImageMetadata image_metadata = 9;
+  optional AudioMetadata audio_metadata = 10;
+  optional VideoMetadata video_metadata = 11;
+  optional OSMetadata os_metadata = 12;
+  optional OSContextTaxonomy os_taxonomy = 13;
+  optional ContentStructure content_structure = 14;
+  optional FileHash file_hash = 15;
+  optional ContentQuality content_quality = 16;
+  optional EnrichmentData enrichment = 17;
+  repeated string path_components = 18;
+  optional string path_pattern = 19;
+  IndexingState indexed = 20;
+  repeated IndexingError indexing_errors = 21;
+}
+
+// FileStats contains basic file statistics
+message FileStats {
+  int64 size = 1;
+  int64 created = 2;
+  int64 modified = 3;
+  int64 accessed = 4;
+  bool is_read_only = 5;
+  bool is_hidden = 6;
+}
+
+// MimeTypeInfo contains MIME type information
+message MimeTypeInfo {
+  string mime_type = 1;
+  string category = 2;
+  string encoding = 3;
+}
+
+// CodeMetrics contains code analysis metrics
+message CodeMetrics {
+  int32 lines_of_code = 1;
+  int32 comment_lines = 2;
+  int32 blank_lines = 3;
+  double comment_percentage = 4;
+  int32 function_count = 5;
+  int32 class_count = 6;
+  double complexity = 7;
+}
+
+// DocumentMetrics contains document analysis metrics
+message DocumentMetrics {
+  int32 page_count = 1;
+  int32 word_count = 2;
+  int32 character_count = 3;
+  optional string author = 4;
+  optional string title = 5;
+}
+
+// IndexingState tracks which indexing phases have been completed
+message IndexingState {
+  bool basic = 1;
+  bool mime = 2;
+  bool code = 3;
+  bool document = 4;
+  bool mirror = 5;
+  bool os_metadata = 6;
+  bool enrichment = 7;
+}
+
+// IndexingError represents an error encountered during file indexing
+message IndexingError {
+  string stage = 1;        // Stage where error occurred (e.g., "document", "mirror", "code")
+  string operation = 2;   // Operation that failed (e.g., "read_mirror", "parse_content")
+  string error = 3;       // Error message
+  string details = 4;     // Additional details for debugging
+  string requirement = 5; // What requirement was missing (e.g., "mirror_file", "metadata")
+  int64 timestamp = 6;    // When the error occurred (Unix timestamp)
+}
+
+// FileHash contains file hash information for duplicate detection
+message FileHash {
+  string md5 = 1;
+  string sha256 = 2;
+  string sha512 = 3;
+}
+
+// ImageMetadata contains image-specific metadata (EXIF, IPTC, XMP)
+message ImageMetadata {
+  // Basic image properties
+  int32 width = 1;
+  int32 height = 2;
+  int32 color_depth = 3;
+  optional string color_space = 4;
+  optional string format = 5;
+  optional int32 orientation = 6;
+
+  // EXIF metadata
+  optional string camera_make = 7;
+  optional string camera_model = 8;
+  optional string software = 9;
+  optional int64 date_taken = 10;
+  optional string artist = 11;
+  optional string copyright = 12;
+
+  // Camera settings
+  optional double f_number = 13;
+  optional string exposure_time = 14;
+  optional int32 iso = 15;
+  optional double focal_length = 16;
+  optional int32 focal_length_35mm = 17;
+  optional string flash = 18;
+
+  // GPS/Location
+  optional double gps_latitude = 19;
+  optional double gps_longitude = 20;
+  optional double gps_altitude = 21;
+  optional string gps_location = 22;
+
+  // IPTC metadata
+  optional string iptc_caption = 23;
+  repeated string iptc_keywords = 24;
+  optional string iptc_byline = 25;
+  optional string iptc_copyright = 26;
+
+  // Image analysis
+  repeated string dominant_colors = 27;
+  optional bool has_transparency = 28;
+  optional bool is_animated = 29;
+  optional int32 frame_count = 30;
+}
+
+// AudioMetadata contains audio file metadata
+message AudioMetadata {
+  // Basic audio properties
+  optional double duration = 1;
+  optional int32 bitrate = 2;
+  optional int32 sample_rate = 3;
+  optional int32 channels = 4;
+  optional int32 bit_depth = 5;
+  optional string codec = 6;
+  optional string format = 7;
+
+  // ID3 tags (MP3)
+  optional string title = 8;
+  optional string artist = 9;
+  optional string album = 10;
+  optional int32 year = 11;
+  optional string genre = 12;
+  optional int32 track = 13;
+  optional int32 disc = 14;
+  optional string composer = 15;
+  optional string publisher = 16;
+  optional string comment = 17;
+  optional int32 bpm = 18;
+  optional string isrc = 19;
+  optional string copyright = 20;
+  optional string album_artist = 21;
+
+  // Technical metadata
+  optional bool has_album_art = 22;
+  optional double replay_gain = 23;
+  optional bool is_lossless = 24;
+}
+
+// VideoMetadata contains video file metadata
+message VideoMetadata {
+  // Basic video properties
+  optional double duration = 1;
+  int32 width = 2;
+  int32 height = 3;
+  optional double frame_rate = 4;
+  optional int32 bitrate = 5;
+  optional string codec = 6;
+  optional string container = 7;
+
+  // Video stream
+  optional string video_codec = 8;
+  optional int32 video_bitrate = 9;
+  optional string pixel_format = 10;
+  optional string aspect_ratio = 11;
+
+  // Audio stream
+  optional string audio_codec = 12;
+  optional int32 audio_bitrate = 13;
+  optional int32 audio_sample_rate = 14;
+  optional int32 audio_channels = 15;
+  optional string audio_language = 16;
+
+  // Metadata tags
+  optional string title = 17;
+  optional string artist = 18;
+  optional string album = 19;
+  optional string genre = 20;
+  optional int32 year = 21;
+  optional string director = 22;
+  optional string description = 23;
+  optional string copyright = 24;
+
+  // Technical metadata
+  optional bool has_subtitles = 25;
+  repeated string subtitle_languages = 26;
+  optional bool has_chapters = 27;
+  optional int32 chapter_count = 28;
+  optional bool is_hd = 29;
+  optional bool is_4k = 30;
+}
+
+// OSMetadata contains OS-level file metadata
+message OSMetadata {
+  optional PermissionsInfo permissions = 1;
+  optional UserInfo owner = 2;
+  optional GroupInfo group = 3;
+  optional FileAttributes attributes = 4;
+  map<string, string> extended_attrs = 5;
+  repeated ACLEntry acls = 6;
+  optional OSTimestamps timestamps = 7;
+  optional FileSystemInfo file_system = 8;
+}
+
+// PermissionsInfo contains detailed permission information
+message PermissionsInfo {
+  string octal = 1;
+  string string_repr = 2;
+  bool owner_read = 3;
+  bool owner_write = 4;
+  bool owner_execute = 5;
+  bool group_read = 6;
+  bool group_write = 7;
+  bool group_execute = 8;
+  bool other_read = 9;
+  bool other_write = 10;
+  bool other_execute = 11;
+  bool setuid = 12;
+  bool setgid = 13;
+  bool sticky_bit = 14;
+}
+
+// UserInfo contains user information
+message UserInfo {
+  int32 uid = 1;
+  string username = 2;
+  optional string full_name = 3;
+  optional string home_dir = 4;
+}
+
+// GroupInfo contains group information
+message GroupInfo {
+  int32 gid = 1;
+  string group_name = 2;
+  repeated string members = 3;
+}
+
+// FileAttributes contains file attribute flags
+message FileAttributes {
+  bool is_read_only = 1;
+  bool is_hidden = 2;
+  bool is_system = 3;
+  bool is_archive = 4;
+  bool is_compressed = 5;
+  bool is_encrypted = 6;
+  bool is_symbolic_link = 7;
+  optional string link_target = 8;
+}
+
+// ACLEntry represents an access control list entry
+message ACLEntry {
+  string principal = 1;
+  string type = 2;
+  repeated string permissions = 3;
+  bool is_inherited = 4;
+}
+
+// OSTimestamps contains OS-level timestamps
+message OSTimestamps {
+  int64 created = 1;
+  int64 modified = 2;
+  int64 accessed = 3;
+  optional int64 changed = 4;
+  optional int64 backup = 5;
+}
+
+// FileSystemInfo contains file system information
+message FileSystemInfo {
+  optional string fs_type = 1;
+  optional string mount_point = 2;
+  optional string device = 3;
+  optional int64 inode = 4;
+  optional int32 hard_links = 5;
+  optional int64 block_size = 6;
+  optional int64 blocks = 7;
+}
+
+// OSContextTaxonomy contains taxonomic classification of OS context
+message OSContextTaxonomy {
+  optional SecurityTaxonomy security = 1;
+  optional OwnershipTaxonomy ownership = 2;
+  optional TemporalTaxonomy temporal = 3;
+  optional SystemTaxonomy system = 4;
+}
+
+// SecurityTaxonomy classifies security context
+message SecurityTaxonomy {
+  string permission_level = 1;
+  repeated string security_flags = 2;
+  optional string access_pattern = 3;
+}
+
+// OwnershipTaxonomy classifies ownership context
+message OwnershipTaxonomy {
+  string owner_type = 1;
+  string group_category = 2;
+  optional string sharing_scope = 3;
+}
+
+// TemporalTaxonomy classifies temporal context
+message TemporalTaxonomy {
+  string access_frequency = 1;
+  string age_category = 2;
+  string staleness_category = 3;
+}
+
+// SystemTaxonomy classifies system context
+message SystemTaxonomy {
+  string file_type_category = 1;
+  string fs_category = 2;
+  repeated string system_attributes = 3;
+}
+
+// ContentStructure contains analysis of document structure
+message ContentStructure {
+  repeated HeadingInfo headings = 1;
+  int32 heading_depth = 2;
+  bool has_lists = 3;
+  int32 list_count = 4;
+  int32 max_list_depth = 5;
+  bool has_toc = 6;
+  repeated string toc_entries = 7;
+  bool has_cross_refs = 8;
+  int32 cross_ref_count = 9;
+  bool has_footnotes = 10;
+  bool has_endnotes = 11;
+  int32 footnote_count = 12;
+  int32 endnote_count = 13;
+  int32 section_count = 14;
+  repeated SectionInfo sections = 15;
+}
+
+// HeadingInfo represents a heading in the document
+message HeadingInfo {
+  int32 level = 1;
+  string text = 2;
+  int32 line = 3;
+  string path = 4;
+}
+
+// SectionInfo represents a document section
+message SectionInfo {
+  string title = 1;
+  int32 level = 2;
+  int32 start_line = 3;
+  int32 end_line = 4;
+  string heading_path = 5;
+}
+
+// ContentQuality contains content quality analysis metrics
+message ContentQuality {
+  double readability_score = 1;
+  double complexity_score = 2;
+  double quality_score = 3;
+  optional string readability_level = 4;
+}
+
+// EnrichmentData contains data from the enrichment stage
+message EnrichmentData {
+  repeated NamedEntity named_entities = 1;
+  repeated Citation citations = 2;
+  optional SentimentAnalysis sentiment = 3;
+  optional OCRResult ocr_text = 4;
+  repeated Table tables = 5;
+  repeated Formula formulas = 6;
+  repeated Dependency dependencies = 7;
+  optional Transcription transcription = 8;
+  repeated DuplicateInfo duplicates = 9;
+  int64 extracted_at = 10;
+}
+
+// NamedEntity represents an extracted named entity
+message NamedEntity {
+  string text = 1;
+  string type = 2;
+  double confidence = 3;
+  int32 start_offset = 4;
+  int32 end_offset = 5;
+}
+
+// Citation represents an extracted citation/reference
+message Citation {
+  string text = 1;
+  string type = 2;
+  optional string doi = 3;
+  optional string url = 4;
+  optional string authors = 5;
+  optional string title = 6;
+  optional int32 year = 7;
+}
+
+// SentimentAnalysis contains sentiment analysis results
+message SentimentAnalysis {
+  string overall_sentiment = 1;
+  double positive_score = 2;
+  double negative_score = 3;
+  double neutral_score = 4;
+  double confidence = 5;
+}
+
+// OCRResult contains OCR extraction results
+message OCRResult {
+  string text = 1;
+  string language = 2;
+  double confidence = 3;
+}
+
+// Table represents an extracted table
+message Table {
+  int32 rows = 1;
+  int32 columns = 2;
+  repeated string headers = 3;
+  optional string title = 4;
+}
+
+// Formula represents an extracted formula
+message Formula {
+  string latex = 1;
+  string type = 2;
+  optional string description = 3;
+}
+
+// Dependency represents a code dependency
+message Dependency {
+  string name = 1;
+  string type = 2;
+  optional string version = 3;
+  optional string path = 4;
+}
+
+// Transcription contains audio/video transcription
+message Transcription {
+  string text = 1;
+  string language = 2;
+  double confidence = 3;
+  optional double duration = 4;
+}
+
+// DuplicateInfo contains duplicate file information
+message DuplicateInfo {
+  string file_id = 1;
+  string relative_path = 2;
+  double similarity = 3;
+  string match_type = 4;
+}
+
+// FileEvent represents a file system event
+message FileEvent {
+  enum EventType {
+    EVENT_TYPE_UNSPECIFIED = 0;
+    EVENT_TYPE_CREATED = 1;
+    EVENT_TYPE_MODIFIED = 2;
+    EVENT_TYPE_DELETED = 3;
+    EVENT_TYPE_RENAMED = 4;
+  }
+  EventType type = 1;
+  string path = 2;
+  optional string old_path = 3;
+  int64 timestamp = 4;
+}
+
+// ScanWorkspaceRequest initiates a workspace scan
+message ScanWorkspaceRequest {
+  string workspace_id = 1;
+  string path = 2;
+  bool force_full_scan = 3;
+}
+
+// ScanProgress reports scan progress
+message ScanProgress {
+  int32 files_scanned = 1;
+  int32 files_total = 2;
+  string current_path = 3;
+  double percentage = 4;
+  string phase = 5;
+  bool completed = 6;
+  optional string error = 7;
+}
+
+// GetWorkspaceStatsRequest requests workspace statistics
+message GetWorkspaceStatsRequest {
+  string workspace_id = 1;
+}
+
+// WorkspaceStats contains workspace statistics
+message WorkspaceStats {
+  int32 total_files = 1;
+  int64 total_size = 2;
+  map<string, int32> extension_counts = 3;
+  map<string, int32> folder_counts = 4;
+  int64 last_indexed = 5;
+}
+
+// GetFileRequest requests a single file
+message GetFileRequest {
+  string workspace_id = 1;
+  oneof identifier {
+    string file_id = 2;
+    string relative_path = 3;
+  }
+}
+
+// ProcessFileRequest reindexes a single file.
+message ProcessFileRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+}
+
+// ListFilesRequest lists files with filtering
+message ListFilesRequest {
+  string workspace_id = 1;
+  Pagination pagination = 2;
+  string sort_by = 3;
+  bool sort_desc = 4;
+}
+
+// SearchFilesRequest searches files by pattern
+message SearchFilesRequest {
+  string workspace_id = 1;
+  string query = 2;
+  Pagination pagination = 3;
+}
+
+// WatchFilesRequest subscribes to file events
+message WatchFilesRequest {
+  string workspace_id = 1;
+  repeated string paths = 2;
+}
+
+// ListByTypeRequest lists files by extension/type
+message ListByTypeRequest {
+  string workspace_id = 1;
+  string extension = 2;
+  Pagination pagination = 3;
+}
+
+// ListByFolderRequest lists files in a folder
+message ListByFolderRequest {
+  string workspace_id = 1;
+  string folder = 2;
+  bool recursive = 3;
+  Pagination pagination = 4;
+}
+
+// ListByDateRequest lists files by date range
+message ListByDateRequest {
+  string workspace_id = 1;
+  int64 start_date = 2;
+  int64 end_date = 3;
+  Pagination pagination = 4;
+}
+
+// ListBySizeRequest lists files by size range
+message ListBySizeRequest {
+  string workspace_id = 1;
+  int64 min_size = 2;
+  int64 max_size = 3;
+  Pagination pagination = 4;
+}
+
+// ListByContentTypeRequest lists files by content type category
+message ListByContentTypeRequest {
+  string workspace_id = 1;
+  string category = 2;
+  Pagination pagination = 3;
+}

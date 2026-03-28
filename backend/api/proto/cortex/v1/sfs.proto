@@ -1,0 +1,114 @@
+syntax = "proto3";
+
+package cortex.v1;
+
+option go_package = "github.com/dacrypt/cortex/backend/api/gen/cortex/v1;cortexv1";
+
+// SemanticFileSystemService provides natural language operations for file organization.
+// Inspired by LSFS paper - allows users to organize files using natural language commands.
+service SemanticFileSystemService {
+  // ExecuteCommand parses and executes a natural language file organization command.
+  rpc ExecuteCommand(SFSCommandRequest) returns (SFSCommandResult);
+
+  // SuggestCommands suggests possible commands based on context.
+  rpc SuggestCommands(SuggestCommandsRequest) returns (stream CommandSuggestion);
+
+  // PreviewCommand shows what would happen without executing.
+  rpc PreviewCommand(SFSCommandRequest) returns (SFSPreviewResult);
+
+  // GetCommandHistory returns recent commands for the workspace.
+  rpc GetCommandHistory(GetCommandHistoryRequest) returns (stream SFSCommandHistoryEntry);
+}
+
+// SFSCommandRequest represents a natural language command request.
+message SFSCommandRequest {
+  string workspace_id = 1;
+  string command = 2;      // Natural language command (e.g., "group all PDFs by author")
+  bool dry_run = 3;        // Preview without executing
+  repeated string context_file_ids = 4;  // Optional: specific files to operate on
+}
+
+// SFSOperationType defines the type of operation parsed from the command.
+enum SFSOperationType {
+  SFS_OPERATION_UNKNOWN = 0;
+  SFS_OPERATION_GROUP = 1;       // Group files into projects/categories
+  SFS_OPERATION_FIND = 2;        // Find files matching criteria
+  SFS_OPERATION_TAG = 3;         // Add tags to files
+  SFS_OPERATION_UNTAG = 4;       // Remove tags from files
+  SFS_OPERATION_ASSIGN = 5;      // Assign files to project
+  SFS_OPERATION_UNASSIGN = 6;    // Remove files from project
+  SFS_OPERATION_CREATE = 7;      // Create new project/category
+  SFS_OPERATION_MERGE = 8;       // Merge projects/categories
+  SFS_OPERATION_RENAME = 9;      // Rename project/category
+  SFS_OPERATION_SUMMARIZE = 10;  // Generate summary for files
+  SFS_OPERATION_RELATE = 11;     // Create relationships between files
+  SFS_OPERATION_QUERY = 12;      // Ask a question about files
+}
+
+// FileChange represents a change to be applied to a file.
+message FileChange {
+  string file_id = 1;
+  string relative_path = 2;
+  SFSOperationType operation = 3;
+  string before_value = 4;  // Previous state (for undo)
+  string after_value = 5;   // New state
+  string target = 6;        // Target project/tag/category
+}
+
+// SFSCommandResult represents the result of executing a command.
+message SFSCommandResult {
+  bool success = 1;
+  SFSOperationType operation = 2;
+  repeated FileChange changes = 3;
+  string explanation = 4;      // Human-readable explanation of what was done
+  string error_message = 5;    // Error if not successful
+  int32 files_affected = 6;
+  string undo_command = 7;     // Command to undo this operation
+}
+
+// SFSPreviewResult shows what would happen without executing.
+message SFSPreviewResult {
+  SFSOperationType operation = 1;
+  repeated FileChange planned_changes = 2;
+  string explanation = 3;
+  int32 files_affected = 4;
+  double confidence = 5;       // How confident the system is in the interpretation
+  repeated string warnings = 6;
+  repeated string alternative_interpretations = 7;
+}
+
+// SuggestCommandsRequest requests command suggestions.
+message SuggestCommandsRequest {
+  string workspace_id = 1;
+  string partial_command = 2;   // Partial command for autocomplete
+  repeated string context_file_ids = 3;  // Files currently selected
+  int32 limit = 4;
+}
+
+// CommandSuggestion represents a suggested command.
+message CommandSuggestion {
+  string command = 1;
+  string description = 2;
+  SFSOperationType operation = 3;
+  double relevance = 4;
+  string category = 5;  // Category of suggestion (e.g., "organization", "search", "tagging")
+}
+
+// GetCommandHistoryRequest requests command history.
+message GetCommandHistoryRequest {
+  string workspace_id = 1;
+  int32 limit = 2;
+  int64 since_timestamp = 3;  // Unix milliseconds
+}
+
+// SFSCommandHistoryEntry represents a past command execution.
+message SFSCommandHistoryEntry {
+  string id = 1;
+  string workspace_id = 2;
+  string command = 3;
+  SFSOperationType operation = 4;
+  bool success = 5;
+  int32 files_affected = 6;
+  int64 executed_at = 7;
+  string result_summary = 8;
+}

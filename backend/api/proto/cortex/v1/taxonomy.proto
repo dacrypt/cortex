@@ -1,0 +1,274 @@
+syntax = "proto3";
+
+package cortex.v1;
+
+option go_package = "github.com/dacrypt/cortex/backend/api/gen/cortex/v1;cortexv1";
+
+// TaxonomyService provides dynamic category hierarchy operations.
+// Inspired by Chain-of-Layer paper for LLM-driven taxonomy induction.
+service TaxonomyService {
+  // GetRootNodes returns top-level taxonomy categories.
+  rpc GetRootNodes(GetRootNodesRequest) returns (stream TaxonomyNode);
+
+  // GetNode returns a specific taxonomy node.
+  rpc GetNode(GetNodeRequest) returns (TaxonomyNode);
+
+  // GetNodeByPath returns a node by its path (e.g., "Documents/Reports").
+  rpc GetNodeByPath(GetNodeByPathRequest) returns (TaxonomyNode);
+
+  // GetChildren returns child nodes of a parent.
+  rpc GetChildren(GetChildrenRequest) returns (stream TaxonomyNode);
+
+  // GetAncestors returns ancestor nodes up to root.
+  rpc GetAncestors(GetAncestorsRequest) returns (stream TaxonomyNode);
+
+  // GetNodeFiles returns files assigned to a node.
+  rpc GetNodeFiles(GetNodeFilesRequest) returns (stream TaxonomyFileEntry);
+
+  // CreateNode creates a new taxonomy category.
+  rpc CreateNode(CreateNodeRequest) returns (TaxonomyNode);
+
+  // UpdateNode updates an existing node.
+  rpc UpdateNode(UpdateNodeRequest) returns (TaxonomyNode);
+
+  // DeleteNode removes a taxonomy node.
+  rpc DeleteNode(DeleteNodeRequest) returns (DeleteNodeResponse);
+
+  // AddFileToNode assigns a file to a taxonomy category (poly-hierarchy support).
+  rpc AddFileToNode(AddFileToNodeRequest) returns (AddFileToNodeResponse);
+
+  // RemoveFileFromNode removes a file from a category.
+  rpc RemoveFileFromNode(RemoveFileFromNodeRequest) returns (RemoveFileFromNodeResponse);
+
+  // GetFileTaxonomies returns all taxonomy nodes for a file.
+  rpc GetFileTaxonomies(GetFileTaxonomiesRequest) returns (stream TaxonomyNode);
+
+  // SuggestTaxonomy suggests categories for a file.
+  rpc SuggestTaxonomy(SuggestTaxonomyRequest) returns (stream TaxonomySuggestion);
+
+  // InduceTaxonomy triggers LLM-based taxonomy generation.
+  rpc InduceTaxonomy(InduceTaxonomyRequest) returns (TaxonomyInductionResult);
+
+  // SearchNodes searches for taxonomy nodes by name.
+  rpc SearchNodes(SearchNodesRequest) returns (stream TaxonomyNode);
+
+  // GetStats returns taxonomy statistics.
+  rpc GetStats(GetTaxonomyStatsRequest) returns (TaxonomyStats);
+}
+
+// GetRootNodesRequest requests root nodes.
+message GetRootNodesRequest {
+  string workspace_id = 1;
+}
+
+// GetNodeRequest requests a specific node.
+message GetNodeRequest {
+  string workspace_id = 1;
+  string node_id = 2;
+}
+
+// GetNodeByPathRequest requests a node by path.
+message GetNodeByPathRequest {
+  string workspace_id = 1;
+  string path = 2;  // e.g., "Documents/Reports/Q1"
+}
+
+// GetChildrenRequest requests children of a node.
+message GetChildrenRequest {
+  string workspace_id = 1;
+  string parent_id = 2;
+}
+
+// GetAncestorsRequest requests ancestors of a node.
+message GetAncestorsRequest {
+  string workspace_id = 1;
+  string node_id = 2;
+}
+
+// GetNodeFilesRequest requests files in a node.
+message GetNodeFilesRequest {
+  string workspace_id = 1;
+  string node_id = 2;
+  bool include_descendants = 3;  // Include files from child nodes
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+// CreateNodeRequest creates a new node.
+message CreateNodeRequest {
+  string workspace_id = 1;
+  string name = 2;
+  string parent_id = 3;  // Empty for root node
+  string description = 4;
+  TaxonomyNodeSource source = 5;
+  repeated string keywords = 6;
+}
+
+// UpdateNodeRequest updates a node.
+message UpdateNodeRequest {
+  string workspace_id = 1;
+  string node_id = 2;
+  string name = 3;
+  string description = 4;
+  repeated string keywords = 5;
+}
+
+// DeleteNodeRequest deletes a node.
+message DeleteNodeRequest {
+  string workspace_id = 1;
+  string node_id = 2;
+  bool delete_children = 3;  // Also delete child nodes
+  bool reassign_files = 4;   // Reassign files to parent
+}
+
+// AddFileToNodeRequest assigns a file to a node.
+message AddFileToNodeRequest {
+  string workspace_id = 1;
+  string file_id = 2;
+  string node_id = 3;
+  TaxonomyMappingSource source = 4;
+  double score = 5;  // Relevance score 0-1
+}
+
+// RemoveFileFromNodeRequest removes a file from a node.
+message RemoveFileFromNodeRequest {
+  string workspace_id = 1;
+  string file_id = 2;
+  string node_id = 3;
+}
+
+// GetFileTaxonomiesRequest requests taxonomies for a file.
+message GetFileTaxonomiesRequest {
+  string workspace_id = 1;
+  string file_id = 2;
+}
+
+// SuggestTaxonomyRequest requests taxonomy suggestions.
+message SuggestTaxonomyRequest {
+  string workspace_id = 1;
+  string file_id = 2;
+  int32 max_suggestions = 3;
+}
+
+// InduceTaxonomyRequest triggers taxonomy induction.
+message InduceTaxonomyRequest {
+  string workspace_id = 1;
+  bool include_files = 2;      // Consider file metadata
+  bool include_projects = 3;   // Consider existing projects
+  bool include_clusters = 4;   // Consider detected clusters
+  int32 max_levels = 5;        // Maximum taxonomy depth
+  int32 max_nodes_per_level = 6;
+}
+
+// SearchNodesRequest searches nodes.
+message SearchNodesRequest {
+  string workspace_id = 1;
+  string query = 2;
+  int32 limit = 3;
+}
+
+// GetTaxonomyStatsRequest requests statistics.
+message GetTaxonomyStatsRequest {
+  string workspace_id = 1;
+}
+
+// TaxonomyNodeSource indicates how a node was created.
+enum TaxonomyNodeSource {
+  TAXONOMY_SOURCE_UNKNOWN = 0;
+  TAXONOMY_SOURCE_USER = 1;      // Manually created
+  TAXONOMY_SOURCE_AI = 2;        // AI-induced
+  TAXONOMY_SOURCE_SYSTEM = 3;    // System-generated (root categories)
+  TAXONOMY_SOURCE_IMPORT = 4;    // Imported from external source
+  TAXONOMY_SOURCE_MERGED = 5;    // Created from merge
+}
+
+// TaxonomyMappingSource indicates how a file was assigned.
+enum TaxonomyMappingSource {
+  MAPPING_SOURCE_UNKNOWN = 0;
+  MAPPING_SOURCE_MANUAL = 1;   // User assigned
+  MAPPING_SOURCE_AUTO = 2;     // Auto-assigned by system
+  MAPPING_SOURCE_SUGGESTED = 3; // AI suggested, user accepted
+}
+
+// TaxonomyNode represents a category in the taxonomy.
+message TaxonomyNode {
+  string id = 1;
+  string workspace_id = 2;
+  string name = 3;
+  string description = 4;
+  string parent_id = 5;
+  string path = 6;  // Full path like "Documents/Reports/Q1"
+  int32 level = 7;  // Depth in tree (0 = root)
+  TaxonomyNodeSource source = 8;
+  double confidence = 9;  // For AI-generated nodes
+  repeated string keywords = 10;
+  int32 child_count = 11;
+  int32 doc_count = 12;  // Direct file count
+  int32 total_doc_count = 13;  // Including descendants
+  int64 created_at = 14;
+  int64 updated_at = 15;
+}
+
+// TaxonomyFileEntry represents a file in a taxonomy node.
+message TaxonomyFileEntry {
+  string file_id = 1;
+  string relative_path = 2;
+  string filename = 3;
+  double score = 4;  // Relevance score
+  TaxonomyMappingSource source = 5;
+  int64 assigned_at = 6;
+}
+
+// TaxonomySuggestion represents a suggested category for a file.
+message TaxonomySuggestion {
+  string node_id = 1;  // Existing node ID (if using existing)
+  string node_path = 2;  // Full path
+  string node_name = 3;
+  bool is_new_node = 4;  // Whether this would create a new node
+  string new_node_parent_id = 5;  // Parent for new node
+  double confidence = 6;
+  string reasoning = 7;
+}
+
+// DeleteNodeResponse confirms deletion.
+message DeleteNodeResponse {
+  bool success = 1;
+  int32 nodes_deleted = 2;
+  int32 files_reassigned = 3;
+  string message = 4;
+}
+
+// AddFileToNodeResponse confirms assignment.
+message AddFileToNodeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// RemoveFileFromNodeResponse confirms removal.
+message RemoveFileFromNodeResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// TaxonomyInductionResult represents induction results.
+message TaxonomyInductionResult {
+  bool success = 1;
+  string message = 2;
+  int32 nodes_created = 3;
+  int32 nodes_merged = 4;
+  int32 files_assigned = 5;
+  repeated string errors = 6;
+  int64 duration_ms = 7;
+}
+
+// TaxonomyStats provides statistics.
+message TaxonomyStats {
+  int32 total_nodes = 1;
+  int32 root_nodes = 2;
+  int32 max_depth = 3;
+  int32 files_categorized = 4;
+  int32 files_uncategorized = 5;
+  double avg_files_per_node = 6;
+  double avg_categories_per_file = 7;  // Poly-hierarchy metric
+  int64 last_induction_at = 8;
+}

@@ -1,0 +1,210 @@
+syntax = "proto3";
+
+package cortex.v1;
+
+option go_package = "github.com/dacrypt/cortex/backend/api/gen/cortex/v1;cortexv1";
+
+import "cortex/v1/common.proto";
+
+// TaskService handles task queue and scheduling operations
+service TaskService {
+  // Task management
+  rpc CreateTask(CreateTaskRequest) returns (Task);
+  rpc GetTask(GetTaskRequest) returns (Task);
+  rpc ListTasks(ListTasksRequest) returns (stream Task);
+  rpc CancelTask(CancelTaskRequest) returns (Task);
+  rpc RetryTask(RetryTaskRequest) returns (Task);
+
+  // Queue operations
+  rpc GetQueueStats(GetQueueStatsRequest) returns (QueueStats);
+  rpc PauseQueue(PauseQueueRequest) returns (QueueStats);
+  rpc ResumeQueue(ResumeQueueRequest) returns (QueueStats);
+  rpc DrainQueue(DrainQueueRequest) returns (DrainQueueResult);
+
+  // Scheduling operations
+  rpc ScheduleTask(ScheduleTaskRequest) returns (ScheduledTask);
+  rpc ListScheduledTasks(ListScheduledTasksRequest) returns (stream ScheduledTask);
+  rpc CancelScheduledTask(CancelScheduledTaskRequest) returns (ScheduledTask);
+
+  // Streaming operations
+  rpc WatchTask(WatchTaskRequest) returns (stream TaskProgress);
+  rpc WatchQueue(WatchQueueRequest) returns (stream QueueEvent);
+}
+
+// Task represents a unit of work in the queue
+message Task {
+  string id = 1;
+  TaskType type = 2;
+  TaskStatus status = 3;
+  TaskPriority priority = 4;
+  bytes payload = 5;
+  bytes result = 6;
+  optional string error = 7;
+  int32 retry_count = 8;
+  int32 max_retries = 9;
+  int64 created_at = 10;
+  optional int64 started_at = 11;
+  optional int64 completed_at = 12;
+  TaskProgress progress = 13;
+  optional string workspace_id = 14;
+}
+
+// TaskType enumerates the different types of tasks
+enum TaskType {
+  TASK_TYPE_UNSPECIFIED = 0;
+  TASK_TYPE_SCAN_WORKSPACE = 1;
+  TASK_TYPE_INDEX_FILE = 2;
+  TASK_TYPE_EXTRACT_METADATA = 3;
+  TASK_TYPE_EXTRACT_DOCUMENT = 4;
+  TASK_TYPE_ANALYZE_CODE = 5;
+  TASK_TYPE_GENERATE_SUMMARY = 6;
+  TASK_TYPE_SUGGEST_TAGS = 7;
+  TASK_TYPE_SUGGEST_PROJECT = 8;
+  TASK_TYPE_AUTO_ASSIGN = 9;
+  TASK_TYPE_PLUGIN = 10;
+}
+
+// TaskStatus enumerates the different states of a task
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_PENDING = 1;
+  TASK_STATUS_QUEUED = 2;
+  TASK_STATUS_RUNNING = 3;
+  TASK_STATUS_COMPLETED = 4;
+  TASK_STATUS_FAILED = 5;
+  TASK_STATUS_CANCELLED = 6;
+  TASK_STATUS_RETRYING = 7;
+}
+
+// TaskPriority enumerates task priorities
+enum TaskPriority {
+  TASK_PRIORITY_LOW = 0;
+  TASK_PRIORITY_NORMAL = 1;
+  TASK_PRIORITY_HIGH = 2;
+  TASK_PRIORITY_CRITICAL = 3;
+}
+
+// TaskProgress tracks task execution progress
+message TaskProgress {
+  int32 processed = 1;
+  int32 total = 2;
+  string message = 3;
+  double percentage = 4;
+}
+
+// QueueStats contains queue statistics
+message QueueStats {
+  int32 pending = 1;
+  int32 queued = 2;
+  int32 running = 3;
+  int32 completed = 4;
+  int32 failed = 5;
+  int32 worker_count = 6;
+  bool paused = 7;
+}
+
+// QueueEvent represents a change in the queue
+message QueueEvent {
+  enum EventType {
+    EVENT_TYPE_UNSPECIFIED = 0;
+    EVENT_TYPE_TASK_ADDED = 1;
+    EVENT_TYPE_TASK_STARTED = 2;
+    EVENT_TYPE_TASK_COMPLETED = 3;
+    EVENT_TYPE_TASK_FAILED = 4;
+    EVENT_TYPE_QUEUE_PAUSED = 5;
+    EVENT_TYPE_QUEUE_RESUMED = 6;
+  }
+  EventType type = 1;
+  optional Task task = 2;
+  int64 timestamp = 3;
+}
+
+// ScheduledTask represents a recurring task
+message ScheduledTask {
+  string id = 1;
+  string name = 2;
+  string cron_expression = 3;
+  TaskType task_type = 4;
+  bytes task_payload = 5;
+  bool enabled = 6;
+  optional int64 next_run = 7;
+  optional int64 last_run = 8;
+  optional string workspace_id = 9;
+}
+
+// Task management requests
+message CreateTaskRequest {
+  TaskType type = 1;
+  TaskPriority priority = 2;
+  bytes payload = 3;
+  optional string workspace_id = 4;
+}
+
+message GetTaskRequest {
+  string task_id = 1;
+}
+
+message ListTasksRequest {
+  optional string workspace_id = 1;
+  optional TaskStatus status = 2;
+  optional TaskType type = 3;
+  Pagination pagination = 4;
+}
+
+message CancelTaskRequest {
+  string task_id = 1;
+}
+
+message RetryTaskRequest {
+  string task_id = 1;
+}
+
+// Queue management requests
+message GetQueueStatsRequest {
+  optional string workspace_id = 1;
+}
+
+message PauseQueueRequest {
+  optional string workspace_id = 1;
+}
+
+message ResumeQueueRequest {
+  optional string workspace_id = 1;
+}
+
+message DrainQueueRequest {
+  optional string workspace_id = 1;
+  bool cancel_running = 2;
+}
+
+message DrainQueueResult {
+  int32 cancelled = 1;
+  int32 removed = 2;
+}
+
+// Scheduling requests
+message ScheduleTaskRequest {
+  string name = 1;
+  string cron_expression = 2;
+  TaskType task_type = 3;
+  bytes task_payload = 4;
+  optional string workspace_id = 5;
+}
+
+message ListScheduledTasksRequest {
+  optional string workspace_id = 1;
+  Pagination pagination = 2;
+}
+
+message CancelScheduledTaskRequest {
+  string scheduled_task_id = 1;
+}
+
+// Streaming requests
+message WatchTaskRequest {
+  string task_id = 1;
+}
+
+message WatchQueueRequest {
+  optional string workspace_id = 1;
+}

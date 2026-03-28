@@ -1,0 +1,14 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+# Use build script that ensures binary is removed if build fails
+# The script uses 'set -e' so it exits on any error
+# If build fails, binary won't exist and air won't run it
+cmd = "./scripts/build.sh"
+bin = "./tmp/cortexd"
+full_bin = "./tmp/cortexd --config cortexd.local.yaml"
+include_ext = ["go", "yaml", "yml"]
+exclude_dir = ["tmp", "vendor", "node_modules"]
+# Stop on error - don't run previous build if current build fails
+stop_on_error = true

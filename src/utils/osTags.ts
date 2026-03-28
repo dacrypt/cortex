@@ -3,6 +3,9 @@ import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
 
+export const TAG_MAX_LENGTH = 32;
+export const TAG_MAX_WORDS = 3;
+
 export function isOsTaggingSupported(): boolean {
   if (process.env.CORTEX_DISABLE_OS_TAGS === '1') {
     return false;
@@ -11,8 +14,21 @@ export function isOsTaggingSupported(): boolean {
 }
 
 export function normalizeTag(tag: string): string | null {
-  const normalized = tag.trim().toLowerCase();
-  return normalized.length > 0 ? normalized : null;
+  const trimmed = tag.trim().toLowerCase();
+  if (!trimmed) {
+    return null;
+  }
+  const withoutHash = trimmed.replace(/^#+/, '');
+  const dashed = withoutHash.replace(/[\s_]+/g, '-');
+  const cleaned = dashed.replace(/[^\p{L}\p{N}-]+/gu, '');
+  const collapsed = cleaned.replace(/-+/g, '-').replace(/^-|-$/g, '');
+  if (!collapsed || collapsed.length > TAG_MAX_LENGTH) {
+    return null;
+  }
+  if (collapsed.split('-').length > TAG_MAX_WORDS) {
+    return null;
+  }
+  return collapsed;
 }
 
 export function normalizeTags(tags: string[]): string[] {

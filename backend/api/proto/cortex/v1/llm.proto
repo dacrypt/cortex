@@ -1,0 +1,197 @@
+syntax = "proto3";
+
+package cortex.v1;
+
+option go_package = "github.com/dacrypt/cortex/backend/api/gen/cortex/v1;cortexv1";
+
+import "cortex/v1/common.proto";
+
+// LLMService handles LLM router and AI operations
+service LLMService {
+  // Provider management
+  rpc ListProviders(ListProvidersRequest) returns (ProviderList);
+  rpc GetProviderStatus(GetProviderStatusRequest) returns (ProviderStatus);
+  rpc SetActiveProvider(SetActiveProviderRequest) returns (ProviderStatus);
+
+  // Model operations
+  rpc ListModels(ListModelsRequest) returns (ModelList);
+  rpc GetModelInfo(GetModelInfoRequest) returns (ModelInfo);
+
+  // AI operations
+  rpc SuggestTags(SuggestTagsRequest) returns (TagSuggestions);
+  rpc SuggestProject(SuggestProjectRequest) returns (ProjectSuggestion);
+  rpc GenerateSummary(GenerateSummaryRequest) returns (SummaryResult);
+  rpc ClassifyCategory(ClassifyCategoryRequest) returns (CategoryResult);
+  rpc FindRelatedFiles(FindRelatedFilesRequest) returns (RelatedFilesResult);
+
+  // Raw completion
+  rpc GenerateCompletion(CompletionRequest) returns (CompletionResult);
+  rpc StreamCompletion(CompletionRequest) returns (stream CompletionChunk);
+}
+
+// LLMProvider represents an available LLM provider
+message LLMProvider {
+  string id = 1;
+  string name = 2;
+  string type = 3;  // ollama, lmstudio, openai, anthropic
+  string endpoint = 4;
+  bool available = 5;
+}
+
+// ProviderStatus contains provider health information
+message ProviderStatus {
+  LLMProvider provider = 1;
+  bool connected = 2;
+  repeated string available_models = 3;
+  string active_model = 4;
+  optional string error = 5;
+}
+
+// ModelInfo contains model metadata
+message ModelInfo {
+  string name = 1;
+  string provider = 2;
+  int64 context_length = 3;
+  int64 parameter_count = 4;
+  repeated string capabilities = 5;
+}
+
+// Provider management requests
+message ListProvidersRequest {}
+
+message ProviderList {
+  repeated LLMProvider providers = 1;
+}
+
+message GetProviderStatusRequest {
+  string provider_id = 1;
+}
+
+message SetActiveProviderRequest {
+  string provider_id = 1;
+  optional string model = 2;
+}
+
+// Model management requests
+message ListModelsRequest {
+  optional string provider_id = 1;
+}
+
+message ModelList {
+  repeated ModelInfo models = 1;
+}
+
+message GetModelInfoRequest {
+  string provider_id = 1;
+  string model_name = 2;
+}
+
+// AI operation requests
+message SuggestTagsRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+  optional string content = 3;
+  optional string summary = 4;
+  repeated string key_terms = 5;
+  int32 max_tags = 6;
+}
+
+message TagSuggestions {
+  repeated TagSuggestion suggestions = 1;
+  string model_used = 2;
+  int64 processing_time_ms = 3;
+}
+
+message TagSuggestion {
+  string tag = 1;
+  double confidence = 2;
+  string reason = 3;
+}
+
+message SuggestProjectRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+  optional string content = 3;
+  repeated string recent_files = 4;
+  repeated string existing_projects = 5;
+}
+
+message ProjectSuggestion {
+  optional string project = 1;
+  double confidence = 2;
+  string reason = 3;
+  string model_used = 4;
+  int64 processing_time_ms = 5;
+}
+
+message GenerateSummaryRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+  optional string content = 3;
+  int32 max_length = 4;
+}
+
+message SummaryResult {
+  string summary = 1;
+  repeated string key_terms = 2;
+  string content_hash = 3;
+  string model_used = 4;
+  int64 processing_time_ms = 5;
+}
+
+message ClassifyCategoryRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+  optional string content = 3;
+  repeated string available_categories = 4;
+}
+
+message CategoryResult {
+  string category = 1;
+  double confidence = 2;
+  string model_used = 3;
+  int64 processing_time_ms = 4;
+}
+
+message FindRelatedFilesRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+  optional string content = 3;
+  repeated string candidate_files = 4;
+  int32 max_results = 5;
+}
+
+message RelatedFilesResult {
+  repeated RelatedFile files = 1;
+  string model_used = 2;
+  int64 processing_time_ms = 3;
+}
+
+message RelatedFile {
+  string relative_path = 1;
+  double similarity = 2;
+  string reason = 3;
+}
+
+// Raw completion requests
+message CompletionRequest {
+  string prompt = 1;
+  optional string provider_id = 2;
+  optional string model = 3;
+  int32 max_tokens = 4;
+  double temperature = 5;
+  int32 timeout_ms = 6;
+}
+
+message CompletionResult {
+  string text = 1;
+  int32 tokens_used = 2;
+  string model_used = 3;
+  int64 processing_time_ms = 4;
+}
+
+message CompletionChunk {
+  string text = 1;
+  bool done = 2;
+  optional string error = 3;
+}

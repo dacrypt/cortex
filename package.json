@@ -3,7 +3,12 @@
   "displayName": "Cortex",
   "description": "Semantic cognition layer for your workspace - organize files by projects, tags, and types",
   "version": "0.1.0",
-  "publisher": "your-publisher-name",
+  "publisher": "dacrypt",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dacrypt/cortex.git"
+  },
   "engines": {
     "vscode": "^1.80.0"
   },
@@ -22,57 +27,44 @@
           "title": "Cortex",
           "icon": "resources/cortex-icon.svg"
         }
+      ],
+      "panel": [
+        {
+          "id": "cortex-panel",
+          "title": "Cortex",
+          "icon": "resources/cortex-icon.svg"
+        }
       ]
     },
     "views": {
       "cortex": [
         {
-          "id": "cortex-contextView",
-          "name": "By Project"
+          "id": "cortex-mainView",
+          "name": "Cortex",
+          "icon": "resources/cortex-icon.svg"
         },
         {
-          "id": "cortex-tagView",
-          "name": "By Tag"
+          "id": "cortex-taxonomyView",
+          "name": "Taxonomy",
+          "icon": "$(list-tree)"
         },
         {
-          "id": "cortex-typeView",
-          "name": "By Type"
-        },
-        {
-          "id": "cortex-dateView",
-          "name": "By Date"
-        },
-        {
-          "id": "cortex-sizeView",
-          "name": "By Size"
-        },
-        {
-          "id": "cortex-folderView",
-          "name": "By Folder"
-        },
-        {
-          "id": "cortex-contentTypeView",
-          "name": "By Content Type"
-        },
-        {
-          "id": "cortex-codeMetricsView",
-          "name": "Code Metrics"
-        },
-        {
-          "id": "cortex-documentMetricsView",
-          "name": "Documents"
-        },
-        {
-          "id": "cortex-issuesView",
-          "name": "Issues"
+          "id": "cortex-sfsInput",
+          "name": "SFS Commands",
+          "type": "webview",
+          "icon": "$(terminal)"
         },
         {
           "id": "cortex-fileInfoView",
-          "name": "File Info"
-        },
+          "name": "File Info",
+          "icon": "resources/cortex-icon.svg"
+        }
+      ],
+      "cortex-panel": [
         {
-          "id": "cortex-categoryView",
-          "name": "Biblioteca"
+          "id": "cortex-fileInfoWebview",
+          "name": "File Info",
+          "type": "webview"
         }
       ]
     },
@@ -88,14 +80,59 @@
         "icon": "$(folder)"
       },
       {
+        "command": "cortex.createProject",
+        "title": "Cortex: Create New Project",
+        "icon": "$(add)"
+      },
+      {
+        "command": "cortex.editProject",
+        "title": "Cortex: Edit Project",
+        "icon": "$(edit)"
+      },
+      {
         "command": "cortex.openView",
         "title": "Cortex: Open Cortex View",
         "icon": "$(compass)"
       },
       {
+        "command": "cortex.openBackendFrontend",
+        "title": "Backend Admin",
+        "icon": "$(browser)"
+      },
+      {
+        "command": "cortex.openPipelineProgress",
+        "title": "Pipeline Progress",
+        "icon": "$(list-unordered)"
+      },
+      {
+        "command": "cortex.openMetricsDashboard",
+        "title": "Cortex: AI Metrics Dashboard",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "cortex.openWordEditor",
+        "title": "Cortex: Open Word Editor",
+        "icon": "$(file)"
+      },
+      {
         "command": "cortex.rebuildIndex",
-        "title": "Cortex: Rebuild Index",
+        "title": "Re-index Everything",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "cortex.syncBackend",
+        "title": "Sync Backend",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "cortex.verifyViews",
+        "title": "Cortex: Verify Views",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "cortex.autoIndexAI",
+        "title": "Cortex: Auto Index (AI)",
+        "icon": "$(sparkle)"
       },
       {
         "command": "cortex.enableAccordion",
@@ -118,6 +155,11 @@
         "icon": "$(collapse-all)"
       },
       {
+        "command": "cortex.copyTreeItemText",
+        "title": "Copy Text",
+        "icon": "$(copy)"
+      },
+      {
         "command": "cortex.suggestTagsAI",
         "title": "Cortex: Suggest Tags (AI)",
         "icon": "$(sparkle)"
@@ -133,6 +175,41 @@
         "icon": "$(sparkle)"
       },
       {
+        "command": "cortex.acceptSuggestedTag",
+        "title": "Cortex: Accept Suggested Tag",
+        "icon": "$(check)"
+      },
+      {
+        "command": "cortex.acceptSuggestedProject",
+        "title": "Cortex: Accept Suggested Project",
+        "icon": "$(check)"
+      },
+      {
+        "command": "cortex.rejectSuggestedTag",
+        "title": "Cortex: Reject Suggested Tag",
+        "icon": "$(close)"
+      },
+      {
+        "command": "cortex.rejectSuggestedProject",
+        "title": "Cortex: Reject Suggested Project",
+        "icon": "$(close)"
+      },
+      {
+        "command": "cortex.askAI",
+        "title": "Cortex: Ask AI",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "cortex.refreshViews",
+        "title": "Cortex: Refresh Views",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "cortex.verifyViews",
+        "title": "Cortex: Verify Views",
+        "icon": "$(checklist)"
+      },
+      {
         "command": "vscode.open",
         "title": "Open"
       },
@@ -143,6 +220,60 @@
       {
         "command": "explorer.openWith",
         "title": "Open With..."
+      },
+      {
+        "command": "cortex.executeSemanticCommand",
+        "title": "Cortex: Execute Semantic Command",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "cortex.showCommandHistory",
+        "title": "Cortex: Show Command History",
+        "icon": "$(history)"
+      },
+      {
+        "command": "cortex.taxonomy.createNode",
+        "title": "Cortex: Create Category",
+        "icon": "$(add)"
+      },
+      {
+        "command": "cortex.taxonomy.renameNode",
+        "title": "Cortex: Rename Category",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "cortex.taxonomy.editDescription",
+        "title": "Cortex: Edit Category Description",
+        "icon": "$(note)"
+      },
+      {
+        "command": "cortex.taxonomy.deleteNode",
+        "title": "Cortex: Delete Category",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "cortex.taxonomy.induce",
+        "title": "Cortex: Generate Taxonomy (AI)",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "cortex.taxonomy.refresh",
+        "title": "Cortex: Refresh Taxonomy",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "cortex.taxonomy.showFiles",
+        "title": "Cortex: Show Files in Category"
+      },
+      {
+        "command": "cortex.openClusterGraph",
+        "title": "Cortex: Open Cluster Graph",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "cortex.runClustering",
+        "title": "Cortex: Run Clustering Analysis",
+        "icon": "$(group-by-ref-type)"
       }
     ],
     "menus": {
@@ -154,10 +285,34 @@
           "command": "cortex.assignContext"
         },
         {
+          "command": "cortex.createProject"
+        },
+        {
+          "command": "cortex.editProject"
+        },
+        {
           "command": "cortex.openView"
         },
         {
+          "command": "cortex.openBackendFrontend"
+        },
+        {
+          "command": "cortex.openPipelineProgress"
+        },
+        {
+          "command": "cortex.openMetricsDashboard"
+        },
+        {
+          "command": "cortex.openWordEditor"
+        },
+        {
           "command": "cortex.rebuildIndex"
+        },
+        {
+          "command": "cortex.syncBackend"
+        },
+        {
+          "command": "cortex.autoIndexAI"
         },
         {
           "command": "cortex.suggestTagsAI"
@@ -167,6 +322,18 @@
         },
         {
           "command": "cortex.generateSummaryAI"
+        },
+        {
+          "command": "cortex.acceptSuggestedTag"
+        },
+        {
+          "command": "cortex.acceptSuggestedProject"
+        },
+        {
+          "command": "cortex.rejectSuggestedTag"
+        },
+        {
+          "command": "cortex.rejectSuggestedProject"
         }
       ],
       "editor/context": [
@@ -196,78 +363,253 @@
           "when": "editorTextFocus"
         }
       ],
+      "explorer/context": [
+        {
+          "command": "cortex.openWordEditor",
+          "group": "navigation@1",
+          "when": "resourceExtname == .docx"
+        }
+      ],
       "view/title": [
         {
           "command": "cortex.rebuildIndex",
-          "when": "view == cortex-contextView || view == cortex-tagView || view == cortex-typeView",
-          "group": "navigation"
+          "when": "view == cortex-mainView",
+          "group": "navigation@1",
+          "icon": "$(refresh)"
+        },
+        {
+          "command": "cortex.openPipelineProgress",
+          "when": "view == cortex-mainView",
+          "group": "navigation@2",
+          "icon": "$(list-unordered)"
+        },
+        {
+          "command": "cortex.openBackendFrontend",
+          "when": "view == cortex-mainView",
+          "group": "navigation@3",
+          "icon": "$(browser)"
+        },
+        {
+          "command": "cortex.syncBackend",
+          "when": "cortex.backendOnly && view == cortex-mainView",
+          "group": "navigation@4",
+          "icon": "$(sync)"
         },
         {
           "command": "cortex.enableAccordion",
-          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView || view == cortex-categoryView) && !cortex.accordionEnabled",
-          "group": "navigation"
+          "when": "view == cortex-mainView && !cortex.accordionEnabled",
+          "group": "navigation@5",
+          "icon": "$(list-tree)"
         },
         {
           "command": "cortex.disableAccordion",
-          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView || view == cortex-categoryView) && cortex.accordionEnabled",
-          "group": "navigation"
+          "when": "view == cortex-mainView && cortex.accordionEnabled",
+          "group": "navigation@5",
+          "icon": "$(list-unordered)"
         },
         {
           "command": "cortex.expandAll",
-          "when": "view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView || view == cortex-categoryView",
-          "group": "navigation"
+          "when": "view == cortex-mainView",
+          "group": "navigation@6",
+          "icon": "$(expand-all)"
         },
         {
           "command": "cortex.collapseAll",
-          "when": "view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView || view == cortex-categoryView",
-          "group": "navigation"
+          "when": "view == cortex-mainView",
+          "group": "navigation@7",
+          "icon": "$(collapse-all)"
+        },
+        {
+          "command": "cortex.taxonomy.createNode",
+          "when": "view == cortex-taxonomyView",
+          "group": "navigation@1",
+          "icon": "$(add)"
+        },
+        {
+          "command": "cortex.taxonomy.induce",
+          "when": "view == cortex-taxonomyView",
+          "group": "navigation@2",
+          "icon": "$(sparkle)"
+        },
+        {
+          "command": "cortex.taxonomy.refresh",
+          "when": "view == cortex-taxonomyView",
+          "group": "navigation@3",
+          "icon": "$(refresh)"
         }
       ],
       "view/item/context": [
         {
+          "command": "cortex.taxonomy.createNode",
+          "when": "view == cortex-taxonomyView && viewItem =~ /taxonomyNode/",
+          "group": "1_taxonomy@1"
+        },
+        {
+          "command": "cortex.taxonomy.renameNode",
+          "when": "view == cortex-taxonomyView && viewItem =~ /taxonomyNode/",
+          "group": "1_taxonomy@2"
+        },
+        {
+          "command": "cortex.taxonomy.editDescription",
+          "when": "view == cortex-taxonomyView && viewItem =~ /taxonomyNode/",
+          "group": "1_taxonomy@3"
+        },
+        {
+          "command": "cortex.taxonomy.deleteNode",
+          "when": "view == cortex-taxonomyView && viewItem =~ /taxonomyNode.*userCreated/",
+          "group": "2_danger@1"
+        },
+        {
           "command": "vscode.open",
-          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && viewItem == cortex-file",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
           "group": "navigation"
         },
         {
           "command": "explorer.openToSide",
-          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && viewItem == cortex-file",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
           "group": "navigation"
         },
         {
           "command": "explorer.openWith",
-          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && viewItem == cortex-file",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
           "group": "navigation"
         },
         {
-          "command": "revealInExplorer",
-          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && viewItem == cortex-file",
-          "group": "navigation"
+          "command": "cortex.addTag",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@1"
         },
         {
-          "command": "revealFileInOS",
-          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && viewItem == cortex-file",
-          "group": "navigation"
+          "command": "cortex.assignContext",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@2"
         },
         {
-          "command": "copyPath",
-          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && viewItem == cortex-file",
-          "group": "8_clipboard"
+          "command": "cortex.editProject",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@2"
         },
         {
-          "command": "copyRelativePath",
-          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && viewItem == cortex-file",
-          "group": "8_clipboard"
+          "command": "cortex.suggestTagsAI",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@3"
         },
         {
-          "command": "workbench.files.action.renameFile",
-          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && viewItem == cortex-file",
-          "group": "9_modification"
+          "command": "cortex.suggestProjectAI",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@4"
         },
         {
-          "command": "workbench.files.action.deleteFile",
-          "when": "(view == cortex-contextView || view == cortex-tagView || view == cortex-typeView || view == cortex-dateView || view == cortex-sizeView || view == cortex-folderView || view == cortex-contentTypeView || view == cortex-codeMetricsView || view == cortex-documentMetricsView || view == cortex-issuesView) && viewItem == cortex-file",
-          "group": "9_modification"
+          "command": "cortex.generateSummaryAI",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@5"
+        },
+        {
+          "command": "cortex.askAI",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@6"
+        },
+        {
+          "command": "cortex.autoIndexAI",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@7"
+        },
+        {
+          "command": "cortex.executeSemanticCommand",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@8"
+        },
+        {
+          "command": "cortex.showCommandHistory",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@9"
+        },
+        {
+          "command": "cortex.rebuildIndex",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@10"
+        },
+        {
+          "command": "cortex.syncBackend",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@11"
+        },
+        {
+          "command": "cortex.refreshViews",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@12"
+        },
+        {
+          "command": "cortex.verifyViews",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@13"
+        },
+        {
+          "command": "cortex.openView",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@14"
+        },
+        {
+          "command": "cortex.openBackendFrontend",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@15"
+        },
+        {
+          "command": "cortex.openPipelineProgress",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@16"
+        },
+        {
+          "command": "cortex.openMetricsDashboard",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@17"
+        },
+        {
+          "command": "cortex.openWordEditor",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@18"
+        },
+        {
+          "command": "cortex.enableAccordion",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@19"
+        },
+        {
+          "command": "cortex.disableAccordion",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@20"
+        },
+        {
+          "command": "cortex.expandAll",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@21"
+        },
+        {
+          "command": "cortex.collapseAll",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@22"
+        },
+        {
+          "command": "cortex.copyTreeItemText",
+          "when": "view == cortex-mainView",
+          "group": "9_copy@1"
+        },
+        {
+          "command": "cortex.copyTreeItemText",
+          "when": "view == cortex-taxonomyView",
+          "group": "9_copy@1"
+        },
+        {
+          "command": "cortex.editProject",
+          "when": "view == cortex-mainView && viewItem == cortex-context",
+          "group": "1_cortex@1",
+          "title": "Edit Project (Nature & Attributes)"
+        },
+        {
+          "command": "cortex.createProject",
+          "when": "view == cortex-mainView && viewItem == cortex-file",
+          "group": "1_cortex@2",
+          "title": "Create New Project (with AI Nature)"
         }
       ]
     },
@@ -305,11 +647,6 @@
           "maximum": 1,
           "description": "Minimum confidence required to store a project suggestion instead of auto-assigning."
         },
-        "cortex.llm.enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable AI-powered features using a local LLM service (requires Ollama or compatible service)."
-        },
         "cortex.llm.endpoint": {
           "type": "string",
           "default": "http://localhost:11434",
@@ -329,7 +666,7 @@
         },
         "cortex.llm.autoSummary.enabled": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Automatically generate and cache AI summaries during indexing."
         },
         "cortex.llm.autoSummary.maxFileSize": {
@@ -347,17 +684,17 @@
         },
         "cortex.llm.autoIndex.enabled": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Automatically generate AI tags and project suggestions during indexing."
         },
         "cortex.llm.autoIndex.applyTags": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Automatically apply AI-suggested tags during indexing."
         },
         "cortex.llm.autoIndex.applyProjects": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Automatically apply AI project suggestions during indexing."
         },
         "cortex.llm.autoIndex.useSuggestedContexts": {
@@ -378,6 +715,33 @@
           "maximum": 8,
           "description": "Maximum concurrent AI tag/project requests during indexing."
         },
+        "cortex.grpc.address": {
+          "type": "string",
+          "default": "127.0.0.1:50051",
+          "description": "gRPC address for the Cortex daemon."
+        },
+        "cortex.autoStartBackend": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start the Cortex backend daemon when the extension activates."
+        },
+        "cortex.onlyoffice.documentServerUrl": {
+          "type": "string",
+          "default": "http://localhost:8080",
+          "description": "ONLYOFFICE DocumentServer base URL used by the Word editor webview."
+        },
+        "cortex.onlyoffice.bridgePort": {
+          "type": "number",
+          "default": 7090,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "Local port for the ONLYOFFICE bridge server that serves documents and saves edits."
+        },
+        "cortex.onlyoffice.composeFile": {
+          "type": "string",
+          "default": "docker-compose.onlyoffice.yml",
+          "description": "Docker compose file path used to start ONLYOFFICE DocumentServer."
+        },
         "cortex.mirror.maxConcurrency": {
           "type": "number",
           "default": 1,
@@ -390,6 +754,81 @@
           "default": 25,
           "minimum": 1,
           "description": "Maximum file size (MB) eligible for mirror generation."
+        },
+        "cortex.projectDeduplication": {
+          "type": "object",
+          "default": {
+            "enabled": true,
+            "similarityThreshold": 0.3,
+            "substringMatchThreshold": 0.6,
+            "maxLevenshteinDistance": 0.3,
+            "minProjectNameLength": 3
+          },
+          "description": "Project name deduplication settings for the By Project view.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable automatic merging of similar project names."
+            },
+            "similarityThreshold": {
+              "type": "number",
+              "default": 0.3,
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Similarity threshold for word-based matching (0-1)."
+            },
+            "substringMatchThreshold": {
+              "type": "number",
+              "default": 0.6,
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Minimum length ratio for substring matching (e.g., 'auth' vs 'authentication')."
+            },
+            "maxLevenshteinDistance": {
+              "type": "number",
+              "default": 0.3,
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Maximum normalized Levenshtein distance for similarity (0-1, lower = stricter)."
+            },
+            "minProjectNameLength": {
+              "type": "number",
+              "default": 3,
+              "minimum": 1,
+              "description": "Minimum project name length to consider for deduplication."
+            }
+          }
+        },
+        "cortex.rag": {
+          "type": "object",
+          "default": {
+            "similarityThreshold": 0.5,
+            "maxSuggestions": 10,
+            "enableSemanticGrouping": true
+          },
+          "description": "RAG (Retrieval Augmented Generation) settings for semantic file suggestions.",
+          "properties": {
+            "similarityThreshold": {
+              "type": "number",
+              "default": 0.5,
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Minimum similarity score (0-1) for RAG suggestions. Higher = more strict (fewer but more relevant suggestions)."
+            },
+            "maxSuggestions": {
+              "type": "number",
+              "default": 10,
+              "minimum": 1,
+              "maximum": 50,
+              "description": "Maximum number of RAG suggestions to show per project."
+            },
+            "enableSemanticGrouping": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable semantic grouping of projects based on content similarity (in addition to name-based grouping)."
+            }
+          }
         }
       }
     }
@@ -407,6 +846,7 @@
     "@eslint/js": "^9.39.2",
     "@types/adm-zip": "^0.5.7",
     "@types/better-sqlite3": "^7.6.9",
+    "@types/fs-extra": "^11.0.4",
     "@types/glob": "^7.2.0",
     "@types/mocha": "^10.0.6",
     "@types/node": "^20.11.0",
@@ -423,9 +863,13 @@
     "typescript-eslint": "^8.50.0"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.3",
+    "@grpc/proto-loader": "^0.7.15",
     "adm-zip": "^0.5.16",
     "better-sqlite3": "^12.5.0",
+    "fs-extra": "^11.3.3",
     "pdf-parse": "^2.4.5",
+    "sqlite-vec": "^0.1.6",
     "xlsx": "^0.18.5"
   }
 }

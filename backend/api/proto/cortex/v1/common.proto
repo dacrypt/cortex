@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package cortex.v1;
+
+option go_package = "github.com/dacrypt/cortex/backend/api/gen/cortex/v1;cortexv1";
+
+// Empty message for requests that need no parameters
+message Empty {}
+
+// Pagination for list operations
+message Pagination {
+  int32 offset = 1;
+  int32 limit = 2;
+}
+
+// Timestamp wrapper
+message Timestamp {
+  int64 unix_ms = 1;
+}
+
+// Error details
+message Error {
+  string code = 1;
+  string message = 2;
+  map<string, string> details = 3;
+}

@@ -1,0 +1,236 @@
+syntax = "proto3";
+
+package cortex.v1;
+
+option go_package = "github.com/dacrypt/cortex/backend/api/gen/cortex/v1;cortexv1";
+
+// PreferencesService provides user feedback learning and preference management.
+// Inspired by MemGPT paper for learning from user corrections.
+service PreferencesService {
+  // RecordFeedback records user feedback on a suggestion.
+  rpc RecordFeedback(RecordFeedbackRequest) returns (RecordFeedbackResponse);
+
+  // GetPreferences returns learned preferences for a workspace.
+  rpc GetPreferences(GetPreferencesRequest) returns (stream LearnedPreference);
+
+  // GetPreference returns a specific preference.
+  rpc GetPreference(GetPreferenceRequest) returns (LearnedPreference);
+
+  // ApplyPreferences applies learned preferences to modify a suggestion.
+  rpc ApplyPreferences(ApplyPreferencesRequest) returns (ApplyPreferencesResponse);
+
+  // GetFeedbackStats returns feedback statistics.
+  rpc GetFeedbackStats(GetFeedbackStatsRequest) returns (FeedbackStats);
+
+  // GetFeedbackHistory returns recent feedback.
+  rpc GetFeedbackHistory(GetFeedbackHistoryRequest) returns (stream UserFeedback);
+
+  // ConsolidatePatterns triggers pattern analysis from feedback.
+  rpc ConsolidatePatterns(ConsolidatePatternsRequest) returns (ConsolidatePatternsResponse);
+
+  // Cleanup removes stale preferences.
+  rpc Cleanup(CleanupRequest) returns (CleanupResponse);
+}
+
+// RecordFeedbackRequest records user feedback.
+message RecordFeedbackRequest {
+  string workspace_id = 1;
+  FeedbackAction action = 2;
+  AISuggestion suggestion = 3;
+  Correction correction = 4;  // Only for CORRECTED action
+  FeedbackContext context = 5;
+  int64 response_time_ms = 6;  // How long user took to respond
+}
+
+// GetPreferencesRequest requests preferences.
+message GetPreferencesRequest {
+  string workspace_id = 1;
+  PreferenceType type_filter = 2;  // Optional: filter by type
+  double min_confidence = 3;  // Optional: minimum confidence
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+// GetPreferenceRequest requests a specific preference.
+message GetPreferenceRequest {
+  string workspace_id = 1;
+  string preference_id = 2;
+}
+
+// ApplyPreferencesRequest applies preferences to a suggestion.
+message ApplyPreferencesRequest {
+  string workspace_id = 1;
+  AISuggestion suggestion = 2;
+  FeedbackContext context = 3;
+}
+
+// GetFeedbackStatsRequest requests statistics.
+message GetFeedbackStatsRequest {
+  string workspace_id = 1;
+  int64 since_timestamp = 2;  // Optional: only count since this time
+}
+
+// GetFeedbackHistoryRequest requests feedback history.
+message GetFeedbackHistoryRequest {
+  string workspace_id = 1;
+  FeedbackAction action_filter = 2;  // Optional: filter by action
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+// ConsolidatePatternsRequest triggers consolidation.
+message ConsolidatePatternsRequest {
+  string workspace_id = 1;
+  int32 min_examples = 2;  // Minimum examples to form pattern
+}
+
+// CleanupRequest triggers cleanup.
+message CleanupRequest {
+  string workspace_id = 1;
+  double low_confidence_threshold = 2;  // Remove preferences below this
+  int32 stale_days = 3;  // Remove preferences unused for this many days
+}
+
+// FeedbackAction defines user feedback types.
+enum FeedbackAction {
+  FEEDBACK_ACTION_UNKNOWN = 0;
+  FEEDBACK_ACTION_ACCEPTED = 1;   // User accepted suggestion
+  FEEDBACK_ACTION_REJECTED = 2;   // User rejected suggestion
+  FEEDBACK_ACTION_CORRECTED = 3;  // User modified suggestion
+  FEEDBACK_ACTION_IGNORED = 4;    // User ignored (for timeout tracking)
+}
+
+// PreferenceType defines types of learned preferences.
+enum PreferenceType {
+  PREFERENCE_TYPE_UNKNOWN = 0;
+  PREFERENCE_TYPE_TAGGING = 1;        // Tag preferences
+  PREFERENCE_TYPE_CATEGORIZATION = 2; // Category/project preferences
+  PREFERENCE_TYPE_CLUSTERING = 3;     // Clustering preferences
+  PREFERENCE_TYPE_NAMING = 4;         // Naming conventions
+}
+
+// SuggestionType defines types of suggestions.
+enum SuggestionType {
+  SUGGESTION_TYPE_UNKNOWN = 0;
+  SUGGESTION_TYPE_TAG = 1;
+  SUGGESTION_TYPE_PROJECT = 2;
+  SUGGESTION_TYPE_CATEGORY = 3;
+  SUGGESTION_TYPE_CLUSTER = 4;
+  SUGGESTION_TYPE_RELATIONSHIP = 5;
+}
+
+// AISuggestion represents an AI suggestion for feedback tracking.
+message AISuggestion {
+  SuggestionType type = 1;
+  string value = 2;
+  double confidence = 3;
+  string reasoning = 4;
+  string source = 5;  // e.g., "llm", "clustering", "inference"
+}
+
+// Correction represents user correction to a suggestion.
+message Correction {
+  string corrected_value = 1;  // What user chose instead
+  string correction_reason = 2;  // Optional: why they corrected
+}
+
+// FeedbackContext provides context about when feedback was given.
+message FeedbackContext {
+  string file_id = 1;
+  string file_type = 2;  // e.g., ".pdf"
+  string folder_path = 3;
+  repeated string existing_tags = 4;
+  repeated string existing_projects = 5;
+  map<string, string> metadata = 6;  // Additional context
+}
+
+// UserFeedback represents a recorded feedback entry.
+message UserFeedback {
+  string id = 1;
+  string workspace_id = 2;
+  FeedbackAction action = 3;
+  AISuggestion suggestion = 4;
+  Correction correction = 5;
+  FeedbackContext context = 6;
+  int64 response_time_ms = 7;
+  int64 created_at = 8;
+}
+
+// PreferencePattern defines when a preference applies.
+message PreferencePattern {
+  repeated string file_extensions = 1;  // e.g., [".pdf", ".docx"]
+  repeated string folder_patterns = 2;  // e.g., ["documents/*", "reports/*"]
+  repeated string keywords = 3;  // Keywords in filename/content
+  map<string, string> metadata_patterns = 4;  // Metadata patterns
+}
+
+// PreferenceBehavior defines what the preference does.
+message PreferenceBehavior {
+  double confidence_boost = 1;  // How much to boost confidence
+  repeated string preferred_tags = 2;  // Tags user prefers
+  repeated string avoided_tags = 3;  // Tags user avoids
+  repeated string preferred_projects = 4;
+  repeated string avoided_projects = 5;
+  map<string, string> naming_rules = 6;  // Naming conventions
+}
+
+// LearnedPreference represents a learned user preference.
+message LearnedPreference {
+  string id = 1;
+  string workspace_id = 2;
+  PreferenceType type = 3;
+  PreferencePattern pattern = 4;
+  PreferenceBehavior behavior = 5;
+  double confidence = 6;  // How confident in this preference
+  int32 example_count = 7;  // Times this pattern was reinforced
+  int64 created_at = 8;
+  int64 updated_at = 9;
+  int64 last_used_at = 10;
+}
+
+// RecordFeedbackResponse confirms recording.
+message RecordFeedbackResponse {
+  bool success = 1;
+  string feedback_id = 2;
+  bool preference_updated = 3;  // Whether this updated a preference
+  string preference_id = 4;  // The preference that was updated/created
+  string message = 5;
+}
+
+// ApplyPreferencesResponse returns modified suggestion.
+message ApplyPreferencesResponse {
+  AISuggestion modified_suggestion = 1;
+  double confidence_delta = 2;  // How much confidence changed
+  repeated string applied_preferences = 3;  // Which preferences were applied
+  string explanation = 4;
+}
+
+// FeedbackStats provides statistics.
+message FeedbackStats {
+  int32 total_feedback = 1;
+  int32 accepted = 2;
+  int32 rejected = 3;
+  int32 corrected = 4;
+  int32 ignored = 5;
+  int32 preferences_learned = 6;
+  double acceptance_rate = 7;  // accepted / (accepted + rejected + corrected)
+  double avg_confidence_boost = 8;
+  double avg_response_time_ms = 9;
+}
+
+// ConsolidatePatternsResponse reports consolidation results.
+message ConsolidatePatternsResponse {
+  bool success = 1;
+  int32 patterns_created = 2;
+  int32 patterns_merged = 3;
+  int32 patterns_strengthened = 4;
+  string message = 5;
+}
+
+// CleanupResponse reports cleanup results.
+message CleanupResponse {
+  bool success = 1;
+  int32 preferences_removed = 2;
+  int32 feedback_archived = 3;
+  string message = 4;
+}

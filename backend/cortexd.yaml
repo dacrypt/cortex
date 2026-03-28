@@ -1,0 +1,82 @@
+# Cortex Daemon Configuration
+# Configuración completa con todas las capacidades AI habilitadas
+
+# Server settings
+grpc_address: "localhost:50051"
+http_address: "localhost:8081"
+
+# Storage settings
+data_dir: "../tmp/cortex-test-data"
+plugin_dir: "../tmp/cortex-test-data/plugins"
+
+# Worker settings
+worker_count: 4
+max_concurrent_tasks: 10
+
+# Logging settings
+log_level: "debug"  # debug, info, warn, error - debug para ver todos los detalles
+
+# Mirror extraction settings
+mirror:
+  max_file_size_mb: 25
+
+# Watch paths (optional)
+watch_paths:
+  - "../test-workspace"
+
+# LLM settings - TODAS LAS CAPACIDADES AI HABILITADAS
+llm:
+  enabled: true
+  default_provider: "ollama"
+  default_model: "llama3.2"
+  max_context_tokens: 2000
+  request_timeout_ms: 30000
+
+  # Auto Summary - Generación automática de resúmenes
+  auto_summary:
+    enabled: true
+    max_file_size: 250000  # 250KB - 0 = sin límite
+
+  # Auto Index - Indexación automática con AI
+  auto_index:
+    enabled: true
+    # Aplicar automáticamente tags y proyectos sugeridos
+    apply_tags: true
+    apply_projects: true
+    use_suggested_contexts: true
+    max_file_size: 250000  # 250KB - 0 = sin límite
+    max_tags: 10
+    # Clasificación de categorías
+    enable_categories: true
+    # Archivos relacionados
+    enable_related: true
+    max_related_results: 10
+    related_candidates: 100
+    # RAG (Retrieval Augmented Generation) - TODAS HABILITADAS
+    use_rag_for_categories: true   # Usar RAG para clasificar categorías
+    use_rag_for_tags: true         # Usar RAG para sugerir tags
+    use_rag_for_projects: true     # Usar RAG para sugerir proyectos
+    use_rag_for_related: true      # Usar búsqueda semántica para archivos relacionados
+    use_rag_for_summary: true      # Usar RAG para mejorar resúmenes
+    rag_similarity_threshold: 0.5  # Umbral de similitud para RAG (0.0-1.0)
+
+  # Embeddings settings (para RAG)
+  embeddings:
+    enabled: true
+    endpoint: "http://localhost:11434"
+    model: "nomic-embed-text"  # Modelo de embeddings de Ollama
+
+# Tika Server settings (Apache Tika for metadata extraction)
+tika:
+  enabled: true  # Set to true to enable Tika extraction
+  manage_process: true  # Auto-start/stop Tika Server (requires Java)
+  auto_download: true  # Automatically download Tika JAR if not found
+  jar_path: ""  # Path to tika-server-standard.jar (empty = auto-detect or download)
+  endpoint: "http://localhost:9998"
+  port: 9998
+  timeout: 30s
+  max_file_size: 104857600  # 100MB
+  startup_timeout: 30s  # Timeout for Tika to start
+  health_interval: 10s  # Interval for health checks
+  max_restarts: 3  # Max restart attempts if Tika crashes
+  restart_delay: 5s  # Delay before restarting

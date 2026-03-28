@@ -1,0 +1,504 @@
+syntax = "proto3";
+
+package cortex.v1;
+
+option go_package = "github.com/dacrypt/cortex/backend/api/gen/cortex/v1;cortexv1";
+
+import "cortex/v1/common.proto";
+import "cortex/v1/task.proto";
+
+// AdminService handles daemon control, workspace, and plugin management
+service AdminService {
+  // Daemon management
+  rpc GetStatus(GetStatusRequest) returns (DaemonStatus);
+  rpc Shutdown(ShutdownRequest) returns (ShutdownResult);
+  rpc Reload(ReloadRequest) returns (ReloadResult);
+
+  // Configuration
+  rpc GetConfig(GetConfigRequest) returns (Config);
+  rpc UpdateConfig(UpdateConfigRequest) returns (Config);
+  rpc GetConfigVersions(GetConfigVersionsRequest) returns (ConfigVersionsList);
+  rpc GetConfigVersion(GetConfigVersionRequest) returns (ConfigVersion);
+  rpc RestoreConfigVersion(RestoreConfigVersionRequest) returns (Config);
+  rpc UpdatePrompts(UpdatePromptsRequest) returns (PromptsConfig);
+  rpc GetEnv(GetEnvRequest) returns (EnvVars);
+  rpc GetLogs(GetLogsRequest) returns (LogLines);
+
+  // Workspace management
+  rpc RegisterWorkspace(RegisterWorkspaceRequest) returns (Workspace);
+  rpc UnregisterWorkspace(UnregisterWorkspaceRequest) returns (UnregisterResult);
+  rpc ListWorkspaces(ListWorkspacesRequest) returns (stream Workspace);
+  rpc GetWorkspace(GetWorkspaceRequest) returns (Workspace);
+
+  // Plugin management
+  rpc ListPlugins(ListPluginsRequest) returns (stream Plugin);
+  rpc LoadPlugin(LoadPluginRequest) returns (Plugin);
+  rpc UnloadPlugin(UnloadPluginRequest) returns (UnloadPluginResult);
+  rpc GetPluginConfig(GetPluginConfigRequest) returns (PluginConfig);
+  rpc UpdatePluginConfig(UpdatePluginConfigRequest) returns (PluginConfig);
+
+  // Health & metrics
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResult);
+  rpc GetMetrics(GetMetricsRequest) returns (Metrics);
+
+  // Dashboard metrics (AI metadata quality)
+  rpc GetDashboardMetrics(GetDashboardMetricsRequest) returns (DashboardMetrics);
+  rpc GetConfidenceDistribution(GetConfidenceDistributionRequest) returns (ConfidenceDistributionResponse);
+  rpc GetModelDriftReport(GetModelDriftReportRequest) returns (ModelDriftReport);
+
+  // Pipeline tracing
+  rpc StreamPipeline(StreamPipelineRequest) returns (stream PipelineEvent);
+}
+
+// EmbeddingStatus contains embedding service configuration
+message EmbeddingStatus {
+  bool enabled = 1;
+  string endpoint = 2;
+  string model = 3;
+}
+
+// DaemonStatus contains daemon health information
+message DaemonStatus {
+  string version = 1;
+  int64 uptime_seconds = 2;
+  int32 workspace_count = 3;
+  int32 indexed_files = 4;
+  ResourceUsage resources = 5;
+  QueueStats queue_stats = 6;
+  repeated PluginStatus plugin_statuses = 7;
+  EmbeddingStatus embedding_status = 8;
+}
+
+// ResourceUsage contains system resource metrics
+message ResourceUsage {
+  int64 memory_bytes = 1;
+  int64 memory_max_bytes = 2;
+  double cpu_percent = 3;
+  int32 goroutine_count = 4;
+  int64 db_size_bytes = 5;
+}
+
+// Workspace represents a registered workspace
+message Workspace {
+  string id = 1;
+  string path = 2;
+  string name = 3;
+  bool active = 4;
+  int64 last_indexed = 5;
+  int32 file_count = 6;
+  WorkspaceConfig config = 7;
+}
+
+// WorkspaceConfig contains workspace-specific settings
+message WorkspaceConfig {
+  repeated string excluded_paths = 1;
+  repeated string excluded_extensions = 2;
+  bool auto_index = 3;
+  bool llm_enabled = 4;
+  map<string, string> custom_settings = 5;
+}
+
+// Plugin represents a loaded plugin
+message Plugin {
+  string id = 1;
+  string name = 2;
+  string version = 3;
+  PluginType type = 4;
+  bool enabled = 5;
+  string path = 6;
+  repeated string capabilities = 7;
+}
+
+// PluginType enumerates the different types of plugins
+enum PluginType {
+  PLUGIN_TYPE_UNSPECIFIED = 0;
+  PLUGIN_TYPE_INDEXER = 1;
+  PLUGIN_TYPE_PROCESSOR = 2;
+  PLUGIN_TYPE_LLM_PROVIDER = 3;
+  PLUGIN_TYPE_HOOK = 4;
+}
+
+// PluginStatus contains plugin health information
+message PluginStatus {
+  string plugin_id = 1;
+  bool healthy = 2;
+  optional string error = 3;
+  map<string, string> details = 4;
+}
+
+// PluginConfig contains plugin configuration
+message PluginConfig {
+  string plugin_id = 1;
+  map<string, string> settings = 2;
+}
+
+// Config contains daemon configuration
+message Config {
+  // Server settings
+  string grpc_address = 1;
+  optional string http_address = 2;
+
+  // Storage settings
+  string data_dir = 3;
+  string plugin_dir = 4;
+
+  // Worker settings
+  int32 worker_count = 5;
+  int32 max_concurrent_tasks = 6;
+
+  // LLM settings
+  LLMConfig llm = 7;
+
+  // Logging settings
+  string log_level = 8;
+  optional string log_file = 9;
+  optional string config_path = 10;
+
+  // Mirror settings
+  MirrorConfig mirror = 11;
+}
+
+// LLMConfig contains LLM-specific settings
+message LLMConfig {
+  bool enabled = 1;
+  string default_provider = 2;
+  string default_model = 3;
+  int32 max_context_tokens = 4;
+  int32 request_timeout_ms = 5;
+  repeated ProviderConfig providers = 6;
+  AutoSummaryConfig auto_summary = 7;
+  AutoIndexConfig auto_index = 8;
+  PromptsConfig prompts = 9;
+}
+
+// ProviderConfig contains per-provider settings
+message ProviderConfig {
+  string id = 1;
+  string type = 2;
+  string endpoint = 3;
+  optional string api_key = 4;
+  map<string, string> options = 5;
+}
+
+message MirrorConfig {
+  int64 max_file_size_mb = 1;
+}
+
+message AutoSummaryConfig {
+  bool enabled = 1;
+  int64 max_file_size = 2;
+}
+
+message AutoIndexConfig {
+  bool enabled = 1;
+  bool apply_tags = 2;
+  bool apply_projects = 3;
+  bool use_suggested_contexts = 4;
+  int64 max_file_size = 5;
+  int32 max_tags = 6;
+  bool enable_categories = 7;
+  bool enable_related = 8;
+  int32 max_related_results = 9;
+  int32 related_candidates = 10;
+}
+
+// PromptsConfig contains all AI prompt templates
+message PromptsConfig {
+  // Tag suggestion prompt
+  string suggest_tags = 1;
+  
+  // Project suggestion prompt
+  string suggest_project = 2;
+  
+  // Summary generation prompt
+  string generate_summary = 3;
+  
+  // Key terms extraction prompt
+  string extract_key_terms = 4;
+  
+  // RAG answer generation prompt
+  string rag_answer = 5;
+  
+  // Category classification prompt
+  string classify_category = 6;
+  
+  // Project nature suggestion prompt
+  string suggest_project_nature = 7;
+  
+  // Project description generation prompt
+  string generate_project_description = 8;
+  
+  // Project name validation prompt
+  string validate_project_name = 9;
+}
+
+// ConfigVersion represents a versioned snapshot of configuration
+message ConfigVersion {
+  string version_id = 1;
+  int64 created_at = 2;
+  string created_by = 3;
+  string description = 4;
+  Config config = 5;
+  map<string, string> metadata = 6; // Additional metadata (e.g., quality metrics)
+}
+
+// Configuration versioning requests
+message GetConfigVersionsRequest {
+  int32 limit = 1; // Maximum number of versions to return
+  int32 offset = 2; // Offset for pagination
+}
+
+message ConfigVersionsList {
+  repeated ConfigVersion versions = 1;
+  int32 total = 2;
+}
+
+message GetConfigVersionRequest {
+  string version_id = 1;
+}
+
+message RestoreConfigVersionRequest {
+  string version_id = 1;
+  bool create_backup = 2; // Create a backup before restoring
+  string description = 3; // Description for the restore operation
+}
+
+message UpdatePromptsRequest {
+  PromptsConfig prompts = 1;
+  bool create_version = 2; // Create a new version snapshot
+  string description = 3; // Description for this change
+}
+
+// Daemon management requests
+message GetStatusRequest {}
+
+message ShutdownRequest {
+  bool graceful = 1;
+  int32 timeout_seconds = 2;
+}
+
+message ShutdownResult {
+  bool success = 1;
+  optional string message = 2;
+}
+
+message ReloadRequest {
+  bool reload_config = 1;
+  bool reload_plugins = 2;
+}
+
+message ReloadResult {
+  bool success = 1;
+  repeated string reloaded = 2;
+  repeated string errors = 3;
+}
+
+// Configuration requests
+message GetConfigRequest {}
+
+message UpdateConfigRequest {
+  Config config = 1;
+  bool persist = 2;
+}
+
+message GetEnvRequest {}
+
+message EnvVars {
+  map<string, string> vars = 1;
+}
+
+// Pipeline tracing requests
+message StreamPipelineRequest {
+  optional string workspace_id = 1;
+}
+
+// PipelineEvent represents a single pipeline step.
+message PipelineEvent {
+  string id = 1;
+  string type = 2;
+  string file_path = 3;
+  string stage = 4;
+  optional string error = 5;
+  int64 timestamp_unix = 6;
+  optional string workspace_id = 7;
+}
+
+message GetLogsRequest {
+  int32 tail_lines = 1;
+}
+
+message LogLines {
+  repeated string lines = 1;
+  string source = 2;
+}
+
+// Workspace management requests
+message RegisterWorkspaceRequest {
+  string path = 1;
+  optional string name = 2;
+  optional WorkspaceConfig config = 3;
+}
+
+message UnregisterWorkspaceRequest {
+  string workspace_id = 1;
+  bool delete_data = 2;
+}
+
+message UnregisterResult {
+  bool success = 1;
+  optional string message = 2;
+}
+
+message ListWorkspacesRequest {
+  bool active_only = 1;
+}
+
+message GetWorkspaceRequest {
+  oneof identifier {
+    string workspace_id = 1;
+    string path = 2;
+  }
+}
+
+// Plugin management requests
+message ListPluginsRequest {
+  optional PluginType type = 1;
+  bool enabled_only = 2;
+}
+
+message LoadPluginRequest {
+  string path = 1;
+}
+
+message UnloadPluginRequest {
+  string plugin_id = 1;
+}
+
+message UnloadPluginResult {
+  bool success = 1;
+  optional string message = 2;
+}
+
+message GetPluginConfigRequest {
+  string plugin_id = 1;
+}
+
+message UpdatePluginConfigRequest {
+  string plugin_id = 1;
+  map<string, string> settings = 2;
+}
+
+// Health & metrics requests
+message HealthCheckRequest {
+  bool include_plugins = 1;
+}
+
+message HealthCheckResult {
+  bool healthy = 1;
+  string status = 2;
+  map<string, ComponentHealth> components = 3;
+}
+
+message ComponentHealth {
+  bool healthy = 1;
+  string status = 2;
+  optional string error = 3;
+  int64 latency_ms = 4;
+}
+
+message GetMetricsRequest {
+  bool include_histograms = 1;
+}
+
+message Metrics {
+  int64 timestamp = 1;
+  ResourceUsage resources = 2;
+  map<string, int64> counters = 3;
+  map<string, double> gauges = 4;
+  map<string, Histogram> histograms = 5;
+}
+
+message Histogram {
+  int64 count = 1;
+  double sum = 2;
+  double min = 3;
+  double max = 4;
+  double mean = 5;
+  map<string, double> percentiles = 6;
+}
+
+// Dashboard metrics request/response
+message GetDashboardMetricsRequest {
+  string workspace_id = 1;
+  int64 period_hours = 2; // Time period in hours (default: 24)
+}
+
+message DashboardMetrics {
+  // Extraction health
+  double extraction_success_rate = 1;
+  int32 extraction_failure_count = 2;
+  double avg_extraction_latency_ms = 3;
+
+  // Confidence distributions
+  map<string, int32> confidence_histogram = 4;
+  int32 low_confidence_count = 5;
+
+  // Model performance
+  map<string, int32> model_versions = 6;
+  map<string, int64> token_usage_by_model = 7;
+  map<string, double> cost_by_model = 8;
+
+  // Data quality
+  int32 missing_metadata_count = 9;
+  int32 stale_metadata_count = 10;
+  int32 orphaned_records_count = 11;
+
+  // Temporal trends
+  repeated int32 hourly_extraction_counts = 12;
+  repeated double daily_error_rates = 13;
+
+  // Timestamps
+  int64 generated_at = 14;
+  int64 period_start = 15;
+  int64 period_end = 16;
+}
+
+// Confidence distribution request/response
+message GetConfidenceDistributionRequest {
+  string workspace_id = 1;
+}
+
+message ConfidenceDistributionResponse {
+  map<string, ConfidenceDistribution> distributions = 1;
+}
+
+message ConfidenceDistribution {
+  string category = 1;
+  map<string, double> distribution = 2; // bucket -> percentage
+  double mean = 3;
+  double median = 4;
+  double std_dev = 5;
+}
+
+// Model drift report request/response
+message GetModelDriftReportRequest {
+  string workspace_id = 1;
+}
+
+message ModelDriftReport {
+  string workspace_id = 1;
+  int64 period_hours = 2;
+  bool drift_detected = 3;
+  string drift_severity = 4; // "none", "minor", "major", "critical"
+  repeated DriftIndicator indicators = 5;
+  repeated string recommendations = 6;
+  int64 generated_at = 7;
+}
+
+message DriftIndicator {
+  string metric = 1;
+  double baseline_value = 2;
+  double current_value = 3;
+  double change_percent = 4;
+  bool is_significant = 5;
+}

@@ -1,0 +1,306 @@
+syntax = "proto3";
+
+package cortex.v1;
+
+option go_package = "github.com/dacrypt/cortex/backend/api/gen/cortex/v1;cortexv1";
+
+import "cortex/v1/common.proto";
+import "cortex/v1/file.proto";
+import "cortex/v1/llm.proto";
+
+// MetadataService handles semantic metadata operations (tags, contexts, notes)
+service MetadataService {
+  // Tag operations
+  rpc AddTag(AddTagRequest) returns (FileMetadata);
+  rpc RemoveTag(RemoveTagRequest) returns (FileMetadata);
+  rpc ListByTag(ListByTagRequest) returns (stream FileEntry);
+  rpc GetAllTags(GetAllTagsRequest) returns (TagList);
+  rpc GetTagCounts(GetTagCountsRequest) returns (TagCountList);
+
+  // Context/Project operations
+  rpc AddContext(AddContextRequest) returns (FileMetadata);
+  rpc RemoveContext(RemoveContextRequest) returns (FileMetadata);
+  rpc ListByContext(ListByContextRequest) returns (stream FileEntry);
+  rpc GetAllContexts(GetAllContextsRequest) returns (ContextList);
+
+  // Suggestion operations
+  rpc AddSuggestedContext(AddSuggestedContextRequest) returns (FileMetadata);
+  rpc AcceptSuggestion(AcceptSuggestionRequest) returns (FileMetadata);
+  rpc DismissSuggestion(DismissSuggestionRequest) returns (FileMetadata);
+  rpc GetSuggestions(GetSuggestionsRequest) returns (SuggestionList);
+  rpc GetSuggestedMetadata(GetSuggestedMetadataRequest) returns (SuggestedMetadata);
+
+  // Full metadata operations
+  rpc GetMetadata(GetMetadataRequest) returns (FileMetadata);
+  rpc UpdateNotes(UpdateNotesRequest) returns (FileMetadata);
+  rpc UpdateAISummary(UpdateAISummaryRequest) returns (FileMetadata);
+  rpc BatchUpdateMetadata(stream MetadataUpdate) returns (BatchUpdateResult);
+
+  // Processing traces
+  rpc ListProcessingTraces(ListProcessingTracesRequest) returns (ProcessingTraceList);
+}
+
+// FileMetadata contains user-assigned semantic metadata
+message FileMetadata {
+  string file_id = 1;
+  string relative_path = 2;
+  repeated string tags = 3;
+  repeated string contexts = 4;
+  repeated string suggested_contexts = 5;
+  string type = 6;
+  optional string notes = 7;
+  optional AISummary ai_summary = 8;
+  optional MirrorMetadata mirror = 9;
+  optional AICategory ai_category = 10;
+  repeated RelatedFile ai_related = 11;
+  int64 created_at = 12;
+  int64 updated_at = 13;
+}
+
+// AISummary contains AI-generated content analysis
+message AISummary {
+  string summary = 1;
+  string content_hash = 2;
+  repeated string key_terms = 3;
+  int64 generated_at = 4;
+}
+
+// MirrorMetadata contains document content extraction info
+message MirrorMetadata {
+  string format = 1;  // "md" or "csv"
+  string path = 2;
+  int64 source_mtime = 3;
+  int64 updated_at = 4;
+}
+
+// AICategory contains AI-generated category classification
+message AICategory {
+  string category = 1;
+  double confidence = 2;
+  int64 updated_at = 3;
+}
+
+// Tag operations
+message AddTagRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+  string tag = 3;
+}
+
+message RemoveTagRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+  string tag = 3;
+}
+
+message ListByTagRequest {
+  string workspace_id = 1;
+  string tag = 2;
+  Pagination pagination = 3;
+}
+
+message GetAllTagsRequest {
+  string workspace_id = 1;
+}
+
+message TagList {
+  repeated string tags = 1;
+}
+
+message GetTagCountsRequest {
+  string workspace_id = 1;
+}
+
+message TagCountList {
+  map<string, int32> counts = 1;
+}
+
+// Context operations
+message AddContextRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+  string context = 3;
+}
+
+message RemoveContextRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+  string context = 3;
+}
+
+message ListByContextRequest {
+  string workspace_id = 1;
+  string context = 2;
+  Pagination pagination = 3;
+}
+
+message GetAllContextsRequest {
+  string workspace_id = 1;
+}
+
+message ContextList {
+  repeated string contexts = 1;
+}
+
+// Suggestion operations
+message AddSuggestedContextRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+  string context = 3;
+}
+
+message AcceptSuggestionRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+  string context = 3;
+}
+
+message DismissSuggestionRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+  string context = 3;
+}
+
+message GetSuggestionsRequest {
+  string workspace_id = 1;
+  optional string relative_path = 2;
+}
+
+message SuggestionList {
+  repeated Suggestion suggestions = 1;
+}
+
+message Suggestion {
+  string file_id = 1;
+  string relative_path = 2;
+  repeated string suggested_contexts = 3;
+}
+
+message GetSuggestedMetadataRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+}
+
+// SuggestedMetadata contains AI-generated metadata suggestions
+message SuggestedMetadata {
+  string file_id = 1;
+  string relative_path = 2;
+  repeated SuggestedTag suggested_tags = 3;
+  repeated SuggestedProject suggested_projects = 4;
+  optional SuggestedTaxonomy suggested_taxonomy = 5;
+  repeated SuggestedField suggested_fields = 6;
+  double confidence = 7;
+  string source = 8;
+  int64 generated_at = 9;
+  int64 updated_at = 10;
+}
+
+message SuggestedTag {
+  string tag = 1;
+  double confidence = 2;
+  string reason = 3;
+  string source = 4;
+  string category = 5;
+}
+
+message SuggestedProject {
+  optional string project_id = 1;
+  string project_name = 2;
+  double confidence = 3;
+  string reason = 4;
+  string source = 5;
+  bool is_new = 6;
+}
+
+message SuggestedTaxonomy {
+  string category = 1;
+  string subcategory = 2;
+  string domain = 3;
+  string subdomain = 4;
+  string content_type = 5;
+  string purpose = 6;
+  repeated string topic = 7;
+  string audience = 8;
+  string language = 9;
+  double category_confidence = 10;
+  double domain_confidence = 11;
+  double content_type_confidence = 12;
+  string reasoning = 13;
+  string source = 14;
+}
+
+message SuggestedField {
+  string field_name = 1;
+  string value = 2; // JSON-encoded value
+  double confidence = 3;
+  string reason = 4;
+  string source = 5;
+  string field_type = 6;
+}
+
+// Full metadata operations
+message GetMetadataRequest {
+  string workspace_id = 1;
+  oneof identifier {
+    string file_id = 2;
+    string relative_path = 3;
+  }
+}
+
+message UpdateNotesRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+  string notes = 3;
+}
+
+message UpdateAISummaryRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+  string summary = 3;
+  string content_hash = 4;
+  repeated string key_terms = 5;
+}
+
+message MetadataUpdate {
+  string workspace_id = 1;
+  string relative_path = 2;
+  oneof operation {
+    string add_tag = 3;
+    string remove_tag = 4;
+    string add_context = 5;
+    string remove_context = 6;
+    string set_notes = 7;
+  }
+}
+
+message BatchUpdateResult {
+  int32 successful = 1;
+  int32 failed = 2;
+  repeated string errors = 3;
+}
+
+message ListProcessingTracesRequest {
+  string workspace_id = 1;
+  optional string relative_path = 2;
+  int32 limit = 3;
+}
+
+message ProcessingTraceList {
+  repeated ProcessingTrace traces = 1;
+}
+
+message ProcessingTrace {
+  string file_id = 1;
+  string relative_path = 2;
+  string stage = 3;
+  string operation = 4;
+  string prompt_path = 5;
+  string output_path = 6;
+  string prompt_preview = 7;
+  string output_preview = 8;
+  string model = 9;
+  int32 tokens_used = 10;
+  int64 duration_ms = 11;
+  optional string error = 12;
+  int64 created_at = 13;
+}
