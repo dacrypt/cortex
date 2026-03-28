@@ -1,49 +1,61 @@
 # Cortex
 
-A semantic cognition layer for your workspace. Cortex is a VS Code extension backed by a Go daemon that lets you organize files by projects, tags, and categories — without moving a single file.
+A contextual understanding layer for your file system. Cortex indexes, extracts, and embeds every file in your workspace — code, documents, images, spreadsheets, PDFs — into a semantic vector space. AI agents can then query this space through MCP to understand your files, not just search them.
 
-## What It Does
+## The Problem
 
-Cortex adds a metadata layer on top of your file system. Instead of reorganizing folders, you assign semantic attributes (projects, tags, categories) to files. Multiple virtual views then present the same files grouped in different ways.
+Your file system is a flat list of bytes. AI agents that need to work with your files can only do text search — they have no understanding of what a Word document is about, how a PDF relates to a spreadsheet, or what a folder structure represents.
 
-**Key principles:**
+## What Cortex Does
 
-- Files stay where they are — no copies, no moves
-- One file can belong to multiple projects and have multiple tags
-- All processing happens locally — your data never leaves your machine
-- AI features are optional and powered by local LLMs (Ollama)
+Cortex sits between your files and AI agents. It:
+
+1. **Extracts** content from every file type — PDFs, DOCX, XLSX, images, code, audio, video
+2. **Indexes** deep metadata — not just filenames, but content structure, code complexity, document authors, EXIF data, MIME types
+3. **Embeds** everything into a vector space using local embedding models
+4. **Locates** each file precisely in semantic space based on its full context — content, metadata, relationships, usage patterns
+5. **Serves** this understanding to AI agents via gRPC (MCP-ready)
+
+The result: an agent can ask "find the contracts related to the Q3 financial report" and get meaningful answers, even if those files share no keywords, live in different folders, and are in different formats.
+
+```
+Your Files (any type)
+  │
+  ▼
+Cortex Pipeline
+  ├── Extract: text from PDFs, Office docs, images (OCR), code analysis
+  ├── Analyze: metadata, structure, relationships, entities
+  ├── Embed: vector representations via local models
+  ├── Classify: AI-generated tags, projects, categories, summaries
+  └── Link: cross-document relationships, temporal co-occurrence
+  │
+  ▼
+Semantic Vector Space (SQLite + embeddings)
+  │
+  ▼
+gRPC API / MCP Server
+  ├── Semantic search: "files about authentication"
+  ├── RAG queries: "summarize the API contracts"
+  ├── Contextual retrieval: related files, clusters, knowledge graph
+  └── Structured metadata: tags, projects, states, relationships
+```
 
 ## Architecture
 
-Cortex has two components:
-
 | Component | Language | Role |
 |-----------|----------|------|
-| **VS Code Extension** | TypeScript | UI layer — tree views, commands, webview panels |
-| **Backend Daemon (`cortexd`)** | Go | All processing — indexing, AI, storage, search |
+| **Backend Daemon (`cortexd`)** | Go | Core engine — extraction, indexing, embedding, AI, storage |
+| **VS Code Extension** | TypeScript | UI layer — browse the semantic space visually |
 
-They communicate over gRPC on `127.0.0.1:50051`. The extension is a thin client; all heavy work happens in the daemon.
-
-```
-VS Code Extension (TypeScript)
-  │
-  │  gRPC (localhost:50051)
-  │
-Backend Daemon (Go)
-  ├── Pipeline: basic → mime → mirror → code → document → relationship → state → AI
-  ├── SQLite database (metadata, embeddings, relationships)
-  ├── LLM integration (Ollama, LM Studio, OpenAI-compatible)
-  └── File system watcher (real-time updates)
-```
+The daemon is the brain. It processes files through a multi-stage pipeline, stores everything in SQLite with vector embeddings, and exposes a gRPC API with 100+ methods across 8 services. The VS Code extension is one client; any MCP-compatible agent can be another.
 
 ## Quick Start
 
 ### Prerequisites
 
 - [Go](https://go.dev/dl/) 1.22+
-- [Node.js](https://nodejs.org/) 18+
-- [VS Code](https://code.visualstudio.com/) 1.80+
-- [Ollama](https://ollama.com/) (optional, for AI features)
+- [Node.js](https://nodejs.org/) 18+ (for the VS Code extension)
+- [Ollama](https://ollama.com/) with `llama3.2` and `nomic-embed-text` models
 
 ### 1. Start the backend
 
@@ -55,171 +67,135 @@ make build
 ./cortexd --config cortexd.local.yaml
 ```
 
-The daemon starts a gRPC server on `localhost:50051` and begins indexing files in the configured watch paths.
+### 2. Pull the models
 
-### 2. Run the extension
+```bash
+ollama pull llama3.2           # Language model for AI features
+ollama pull nomic-embed-text   # Embedding model for vector space
+```
+
+### 3. (Optional) Run the VS Code extension
 
 ```bash
 npm install
 npm run compile
+# Press F5 in VS Code to launch the Extension Development Host
 ```
 
-Open the project in VS Code and press `F5` to launch the Extension Development Host. Open any workspace — the extension connects to the running daemon automatically.
+The daemon works standalone — the VS Code extension is just one way to interact with it.
 
-### 3. (Optional) Enable AI features
+## How Indexing Works
 
-```bash
-ollama serve
-ollama pull llama3.2           # Language model
-ollama pull nomic-embed-text   # Embedding model for RAG
-```
+Every file passes through a pipeline that extracts progressively deeper understanding:
 
-AI features are enabled by default in the daemon config. If Ollama is not running, the daemon skips AI stages gracefully.
+| Stage | What It Extracts |
+|-------|-----------------|
+| `basic` | Size, timestamps, hashes (MD5, SHA-256), path structure |
+| `mime` | True MIME type via magic bytes (not just extension) |
+| `mirror` | Full text content from PDFs, DOCX, XLSX, PPTX, legacy Office formats |
+| `code` | Lines of code, complexity, imports, exports, functions, classes |
+| `document` | Markdown parsing, chunking, heading structure, word/page counts |
+| `metadata` | Author, title, creation date, EXIF, IPTC, XMP, OS-level attributes |
+| `relationship` | Cross-file references, imports, dependencies |
+| `state` | Document lifecycle: draft, active, replaced, archived |
+| `enrichment` | Named entities, sentiment, citations, tables, formulas |
+| `embedding` | Vector representation via `nomic-embed-text` for semantic search |
+| `ai` | LLM-generated tags, project assignments, summaries, categories |
+| `clustering` | Semantic clusters via embedding similarity, temporal co-occurrence |
+| `taxonomy` | AI-induced hierarchical category tree (Chain-of-Layer) |
 
-## Features
+After indexing, every file has a rich vector representation that captures its full context — not just its text content, but its metadata, relationships, and semantic meaning.
 
-### Virtual Views
-
-Cortex provides faceted views in the VS Code sidebar:
-
-- **By Project** — files grouped by assigned projects
-- **By Tag** — files grouped by tags
-- **By Type** — files grouped by extension / MIME type
-- **By Date** — files grouped by modification date ranges
-- **By Size** — files grouped by size ranges
-- **By Folder** — standard folder hierarchy
-- **By Content Type** — files grouped by detected MIME type
-- **Code Metrics** — lines of code, complexity, functions
-- **Document Metrics** — page count, word count, author
-- **Taxonomy** — AI-generated hierarchical categories
-
-### AI-Powered Organization
-
-When Ollama is running, Cortex automatically:
-
-- **Suggests tags** based on file content
-- **Suggests projects** based on context and related files
-- **Generates summaries** for documents
-- **Classifies files** into a dynamically generated taxonomy
-- **Finds related files** using semantic similarity (RAG)
-
-You can also trigger these manually via the Command Palette.
+## What You Can Query
 
 ### Semantic Search (RAG)
 
-Ask natural language questions about your workspace:
+Ask natural language questions and get answers with source citations:
 
 ```
-Command Palette → "Cortex: Ask AI"
-> "Which files discuss authentication?"
-> "Summarize the API contracts in this project"
+"Which files discuss the payment integration?"
+"Summarize the architecture decisions in this project"
+"What contracts are related to the Q3 report?"
 ```
 
-The RAG system chunks documents, generates embeddings with `nomic-embed-text`, and retrieves relevant context before answering with the LLM.
+The RAG system retrieves relevant document chunks by embedding similarity, then generates an answer using the LLM with the retrieved context.
 
-### Semantic File System (SFS)
+### Contextual Retrieval
 
-Natural language commands for file organization:
+- **Related files** — find files semantically similar to a given file
+- **Document clusters** — auto-detected groups of related files
+- **Knowledge graph** — relationships between documents (depends_on, replaces, references)
+- **Usage patterns** — files frequently accessed or edited together
+- **Faceted browsing** — filter by tag, project, type, date, size, category, metrics
 
-```
-Command Palette → "Cortex: Execute Semantic Command"
-> "tag all PDFs as documentation"
-> "assign files in src/auth to project authentication"
-> "find all files modified today"
-```
+### Structured Metadata
 
-### Document Clustering
+Every file has extractable structured data:
 
-Cortex groups related files into clusters using:
+- Tags (manual + AI-generated)
+- Project assignments (manual + AI-inferred)
+- AI summaries
+- Document state (draft/active/replaced/archived)
+- Code metrics (LOC, complexity, functions)
+- Document metrics (pages, words, author)
+- Hierarchical categories (AI-generated taxonomy)
 
-- Semantic similarity (embedding distance)
-- Temporal co-occurrence (files edited together)
-- Structural proximity (shared folder paths)
-- Entity overlap (shared named entities)
+## gRPC API
 
-### Knowledge Engine
+The backend exposes 8 gRPC services (defined in [`backend/api/proto/cortex/v1/`](backend/api/proto/)):
 
-Beyond simple tags, Cortex tracks:
+| Service | Methods | Purpose |
+|---------|---------|---------|
+| `AdminService` | 16 | Daemon control, workspace management, pipeline streaming |
+| `FileService` | 11 | Workspace scanning, file queries, grouped listings |
+| `MetadataService` | 16 | Tags, projects, notes, AI summaries, suggestions |
+| `LLMService` | 10 | AI operations — tag/project/summary/category generation |
+| `RAGService` | 3 | Semantic search, RAG queries with citations, index stats |
+| `KnowledgeService` | 34 | Projects, relationships, states, usage analytics, visualization |
+| `TaxonomyService` | 15 | Hierarchical categories, AI-driven taxonomy induction |
+| `ClusteringService` | 6 | Document clustering, similarity graph analysis |
 
-- **Document states** — draft, active, replaced, archived
-- **Relationships** — replaces, depends_on, references, parent_of
-- **Project hierarchy** — projects with sub-projects
-- **Usage analytics** — open frequency, co-occurrence patterns
+See the [backend README](backend/README.md) for the full API reference with every method documented.
 
-### Pipeline
+## VS Code Extension
 
-The backend processes each file through these stages:
+The extension provides a visual interface to browse the semantic space:
 
-| Stage | What It Does |
-|-------|-------------|
-| `basic` | File size, timestamps, hashes (MD5, SHA-256) |
-| `mime` | MIME type detection via magic bytes |
-| `mirror` | Text extraction from PDFs, DOCX, XLSX, PPTX |
-| `code` | Lines of code, complexity, imports, exports |
-| `document` | Markdown parsing, chunking for RAG |
-| `relationship` | Cross-file reference detection |
-| `state` | Document lifecycle state inference |
-| `ai` | Tag/project/summary/category generation via LLM |
+- **Faceted views** — by project, tag, type, date, size, folder, content type, metrics
+- **Taxonomy tree** — AI-generated hierarchical categories
+- **Admin dashboard** — backend status, pipeline progress, configuration
+- **Cluster graph** — visual representation of document relationships
+- **Semantic commands** — natural language file operations
+- **RAG queries** — ask questions about your workspace from the editor
 
-Additional stages run for enrichment, clustering, taxonomy induction, and project inference.
-
-## Commands
-
-All commands are available via `Cmd+Shift+P` / `Ctrl+Shift+P`:
+### Commands
 
 | Command | Description |
 |---------|-------------|
-| `Cortex: Add tag to current file` | Assign a tag to the active file |
-| `Cortex: Assign project to current file` | Assign a project to the active file |
-| `Cortex: Create New Project` | Create a new project |
-| `Cortex: Suggest Tags (AI)` | Get AI-generated tag suggestions |
-| `Cortex: Suggest Project (AI)` | Get AI-generated project suggestions |
-| `Cortex: Generate File Summary (AI)` | Generate an AI summary of the file |
-| `Cortex: Ask AI` | Ask a question about your workspace (RAG) |
-| `Cortex: Execute Semantic Command` | Run a natural language file operation |
-| `Cortex: Open Cortex View` | Focus the Cortex sidebar |
-| `Re-index Everything` | Trigger a full workspace rescan |
-| `Backend Admin` | Open the backend admin dashboard |
-| `Pipeline Progress` | View real-time indexing progress |
+| `Cortex: Ask AI` | RAG query about your workspace |
+| `Cortex: Execute Semantic Command` | Natural language file operation |
+| `Cortex: Suggest Tags (AI)` | AI tag suggestions for current file |
+| `Cortex: Suggest Project (AI)` | AI project suggestions for current file |
+| `Cortex: Generate File Summary (AI)` | Generate AI summary |
+| `Cortex: Add tag to current file` | Manual tag assignment |
+| `Cortex: Assign project to current file` | Manual project assignment |
+| `Re-index Everything` | Trigger full re-indexing |
+| `Backend Admin` | Open admin dashboard |
+| `Pipeline Progress` | Real-time indexing progress |
 
 ## Configuration
 
-### Extension Settings (VS Code)
+### Daemon (YAML)
 
-Open VS Code Settings (`Cmd+,`) and search for "cortex":
-
-```jsonc
-// gRPC connection
-"cortex.grpc.address": "127.0.0.1:50051",
-"cortex.autoStartBackend": true,
-
-// LLM settings
-"cortex.llm.endpoint": "http://localhost:11434",
-"cortex.llm.model": "llama3.2",
-"cortex.llm.maxContextTokens": 2000,
-
-// Auto-indexing
-"cortex.llm.autoSummary.enabled": true,
-"cortex.llm.autoIndex.enabled": true,
-"cortex.llm.autoIndex.applyTags": true,
-"cortex.llm.autoIndex.applyProjects": true,
-
-// RAG
-"cortex.rag.similarityThreshold": 0.5,
-"cortex.rag.maxSuggestions": 10
-```
-
-### Daemon Configuration (YAML)
-
-The daemon reads from a YAML config file. See [`backend/configs/cortexd.yaml.example`](backend/configs/cortexd.yaml.example) for the full reference.
-
-Key sections:
+See [`backend/configs/cortexd.yaml.example`](backend/configs/cortexd.yaml.example) for the full reference.
 
 ```yaml
 grpc_address: "localhost:50051"
 data_dir: "./cortex-data"
 worker_count: 4
-log_level: "info"
+
+watch_paths:
+  - "/path/to/your/workspace"
 
 llm:
   enabled: true
@@ -230,95 +206,69 @@ llm:
     model: "nomic-embed-text"
 
 tika:
-  enabled: true          # Apache Tika for document extraction
+  enabled: true          # Apache Tika for deep document extraction
   auto_download: true    # Downloads Tika JAR automatically
 ```
 
-## gRPC API
+### Extension (VS Code Settings)
 
-The backend exposes these gRPC services (defined in [`backend/api/proto/cortex/v1/`](backend/api/proto/)):
-
-| Service | Methods | Purpose |
-|---------|---------|---------|
-| `AdminService` | 16 | Daemon control, workspace management, health checks, pipeline streaming |
-| `FileService` | 11 | Workspace scanning, file queries, grouping operations |
-| `MetadataService` | 16 | Tags, projects, notes, AI summaries, suggestions |
-| `LLMService` | 10 | Provider management, AI operations (tags, projects, summaries) |
-| `RAGService` | 3 | Semantic search, RAG queries, index statistics |
-| `KnowledgeService` | 34 | Projects, relationships, states, usage, visualization |
-| `TaxonomyService` | 15 | Hierarchical categories, AI-driven taxonomy induction |
-| `ClusteringService` | 6 | Document clustering, graph analysis |
-
-See the [backend README](backend/README.md) for detailed API documentation.
+```jsonc
+"cortex.grpc.address": "127.0.0.1:50051",
+"cortex.llm.endpoint": "http://localhost:11434",
+"cortex.llm.model": "llama3.2"
+```
 
 ## Project Structure
 
 ```
 cortex/
-├── src/                           # VS Code extension (TypeScript)
-│   ├── extension.ts               # Entry point
-│   ├── core/                      # gRPC clients (Admin, Metadata, RAG, LLM, ...)
-│   ├── views/                     # Facet-based tree providers
-│   ├── frontend/                  # WebView panels (dashboard, metrics, editor)
-│   ├── commands/                  # VS Code command handlers
-│   ├── services/                  # Extension services (progress, realtime, AI quality)
-│   ├── models/                    # TypeScript type definitions
-│   └── test/                      # Tests
-├── backend/                       # Go daemon
-│   ├── cmd/cortexd/               # Main entry point
-│   ├── api/proto/                 # Protocol Buffer definitions
+├── backend/                       # Go daemon (the core engine)
+│   ├── cmd/cortexd/               # Entry point
+│   ├── api/proto/                 # gRPC service definitions (8 services)
 │   ├── internal/
-│   │   ├── application/           # Business logic, pipeline
-│   │   ├── domain/                # Domain models, repository interfaces
-│   │   ├── infrastructure/        # SQLite, LLM providers, file system
+│   │   ├── application/           # Pipeline, services, business logic
+│   │   ├── domain/                # Entities, repository interfaces
+│   │   ├── infrastructure/        # SQLite, LLM providers, embeddings, file system
 │   │   └── interfaces/grpc/       # gRPC handlers and adapters
 │   └── Makefile
-├── docs/                          # Documentation
-├── docker-compose.yml             # Apache Tika service
-├── docker-compose.onlyoffice.yml  # OnlyOffice document editor
-├── package.json                   # Extension manifest
+├── src/                           # VS Code extension (TypeScript)
+│   ├── extension.ts               # Entry point
+│   ├── core/                      # gRPC clients
+│   ├── views/                     # Facet-based tree providers
+│   ├── frontend/                  # WebView panels
+│   ├── commands/                  # Command handlers
+│   └── services/                  # Extension services
+├── docker-compose.yml             # Apache Tika (document extraction)
+├── docker-compose.onlyoffice.yml  # OnlyOffice (document editing)
 └── LICENSE                        # MIT
 ```
 
 ## Development
 
-### Extension
-
 ```bash
-npm install          # Install dependencies
-npm run compile      # Build once
-npm run watch        # Build on file changes
-npm test             # Run tests
-npm run lint         # Lint
-```
-
-Press `F5` in VS Code to launch the Extension Development Host with the debugger attached.
-
-### Backend
-
-```bash
+# Backend
 cd backend
-make build           # Build the cortexd binary
+make build           # Build cortexd
 make run             # Build and run
-make test            # Run all tests
-make proto           # Regenerate gRPC code from .proto files
+make test            # Run tests
+make proto           # Regenerate gRPC code
+
+# Extension
+npm install
+npm run compile
+npm run watch        # Watch mode
+npm test
 ```
 
-See [`backend/README.md`](backend/README.md) for full backend development docs.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development guide.
 
-### Docker Services
+## Roadmap
 
-```bash
-# Apache Tika (document metadata extraction)
-docker compose up -d
-
-# OnlyOffice (optional, for document editing)
-docker compose -f docker-compose.onlyoffice.yml up -d
-```
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute.
+- **MCP Server** — expose Cortex as a Model Context Protocol server for any AI agent
+- **Image understanding** — extract visual content, not just EXIF metadata
+- **Multi-workspace** — index across multiple directories and projects
+- **Graph visualization** — interactive knowledge graph in the browser
+- **Plugin system** — custom extractors and pipeline stages
 
 ## License
 

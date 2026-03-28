@@ -1,7 +1,7 @@
 {
   "name": "cortex",
   "displayName": "Cortex",
-  "description": "Semantic cognition layer for your workspace - organize files by projects, tags, and types",
+  "description": "Contextual understanding layer for your file system - indexes, embeds, and serves every file to AI agents via gRPC",
   "version": "0.1.0",
   "publisher": "dacrypt",
   "license": "MIT",
