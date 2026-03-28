@@ -60,6 +60,7 @@ type GenerateRequest struct {
 	TopP        float64
 	Stop        []string
 	TimeoutMs   int
+	Images      [][]byte // Raw image bytes for vision models (nil = text-only)
 }
 
 // GenerateResponse contains the generation result.

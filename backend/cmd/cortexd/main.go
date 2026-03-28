@@ -453,6 +453,18 @@ func registerLLMProviders(cfg *config.Config, llmRouter *llm.Router, logger zero
 				Str("endpoint", providerCfg.Endpoint).
 				Bool("has_api_key", apiKey != "").
 				Msg("Registered OpenAI-compatible LLM provider")
+		case "anthropic":
+			apiKey := providerCfg.APIKey
+			if apiKey == "" {
+				apiKey = os.Getenv("ANTHROPIC_API_KEY")
+			}
+			provider = providers.NewAnthropicProvider(providerCfg.ID, providerCfg.ID, apiKey)
+			llmRouter.RegisterProvider(provider)
+			registeredProviders++
+			logger.Info().
+				Str("provider_id", providerCfg.ID).
+				Bool("has_api_key", apiKey != "").
+				Msg("Registered Anthropic LLM provider")
 		default:
 			logger.Error().
 				Str("provider_id", providerCfg.ID).
@@ -587,6 +599,18 @@ func setupPipelineStages(cfg *config.Config, orchestrator *pipeline.Orchestrator
 	mirrorStage := stages.NewMirrorStage(mirrorExtractor, repos.metadataRepo, ocrService, logger)
 	if err := orchestrator.InsertStage(2, mirrorStage); err != nil {
 		logger.Warn().Err(err).Msg("Failed to insert mirror stage")
+	}
+
+	// Vision stage: image understanding via LLM vision models
+	if cfg.Vision.Enabled && llmRouter != nil {
+		visionStage := stages.NewVisionStage(
+			llmRouter, repos.docRepo, repos.vectorStore, ragEmbedder,
+			cfg.Vision.Model, cfg.Vision.MaxFileSizeMB, cfg.Vision.Prompt, logger,
+		)
+		orchestrator.AddStage(visionStage)
+		logger.Info().
+			Str("model", cfg.Vision.Model).
+			Msg("Vision stage enabled for image understanding")
 	}
 
 	metadataRegistry := metadata.NewRegistry()

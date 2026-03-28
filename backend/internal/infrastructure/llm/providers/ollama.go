@@ -4,6 +4,7 @@ package providers
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -125,6 +126,15 @@ func (p *OllamaProvider) Generate(ctx context.Context, req llm.GenerateRequest) 
 
 	if req.MaxTokens > 0 {
 		payload["options"].(map[string]interface{})["num_predict"] = req.MaxTokens
+	}
+
+	// Vision model support: include base64-encoded images
+	if len(req.Images) > 0 {
+		images := make([]string, len(req.Images))
+		for i, img := range req.Images {
+			images[i] = base64.StdEncoding.EncodeToString(img)
+		}
+		payload["images"] = images
 	}
 
 	body, err := json.Marshal(payload)

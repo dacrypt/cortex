@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/dacrypt/cortex/backend/internal/domain/entity"
@@ -14,13 +15,66 @@ import (
 )
 
 // VectorStore implements repository.VectorStore using SQLite.
+// It uses an optional in-memory HNSW index per workspace for fast approximate
+// nearest neighbor search, falling back to brute-force when the index is not loaded.
 type VectorStore struct {
-	conn *Connection
+	conn    *Connection
+	indices sync.Map // map[string]*HNSWIndex keyed by workspace ID
 }
 
 // NewVectorStore creates a new SQLite vector store.
 func NewVectorStore(conn *Connection) *VectorStore {
 	return &VectorStore{conn: conn}
+}
+
+// getOrLoadIndex returns the HNSW index for a workspace, loading it from
+// SQLite on the first call. Returns nil if loading fails or there are no vectors.
+func (s *VectorStore) getOrLoadIndex(ctx context.Context, workspaceID entity.WorkspaceID) *HNSWIndex {
+	wsKey := workspaceID.String()
+	if val, ok := s.indices.Load(wsKey); ok {
+		return val.(*HNSWIndex)
+	}
+
+	// Load all vectors from SQLite
+	rows, err := s.conn.Query(ctx, `
+		SELECT chunk_id, dimensions, vector
+		FROM chunk_embeddings
+		WHERE workspace_id = ?
+	`, wsKey)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	vectors := make(map[string][]float32)
+	dim := 0
+	for rows.Next() {
+		var (
+			chunkID string
+			dims    int
+			data    []byte
+		)
+		if err := rows.Scan(&chunkID, &dims, &data); err != nil {
+			continue
+		}
+		vec, err := decodeVector(data, dims)
+		if err != nil || len(vec) == 0 {
+			continue
+		}
+		vectors[chunkID] = vec
+		if dim == 0 {
+			dim = dims
+		}
+	}
+
+	if len(vectors) == 0 {
+		return nil
+	}
+
+	idx := NewHNSWIndex(dim)
+	idx.Load(vectors)
+	s.indices.Store(wsKey, idx)
+	return idx
 }
 
 // Upsert inserts or updates a chunk embedding.
@@ -34,7 +88,7 @@ func (s *VectorStore) BulkUpsert(ctx context.Context, workspaceID entity.Workspa
 		return nil
 	}
 
-	return s.conn.Transaction(ctx, func(tx *sql.Tx) error {
+	err := s.conn.Transaction(ctx, func(tx *sql.Tx) error {
 		stmt, err := tx.PrepareContext(ctx, `
 			INSERT INTO chunk_embeddings (workspace_id, chunk_id, dimensions, vector, updated_at)
 			VALUES (?, ?, ?, ?, ?)
@@ -74,6 +128,19 @@ func (s *VectorStore) BulkUpsert(ctx context.Context, workspaceID entity.Workspa
 
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	// Sync in-memory HNSW index
+	if val, ok := s.indices.Load(workspaceID.String()); ok {
+		idx := val.(*HNSWIndex)
+		for _, emb := range embeddings {
+			idx.Insert(emb.ChunkID.String(), emb.Vector)
+		}
+	}
+
+	return nil
 }
 
 // DeleteByDocument removes embeddings for a document's chunks.
@@ -88,7 +155,8 @@ func (s *VectorStore) DeleteByDocument(ctx context.Context, workspaceID entity.W
 	return err
 }
 
-// Search performs a brute-force cosine similarity search.
+// Search performs a cosine similarity search. Uses the in-memory HNSW index
+// for O(log n) approximate search when available, falling back to brute-force.
 func (s *VectorStore) Search(ctx context.Context, workspaceID entity.WorkspaceID, query []float32, topK int) ([]repository.VectorMatch, error) {
 	if len(query) == 0 {
 		return nil, nil
@@ -97,6 +165,12 @@ func (s *VectorStore) Search(ctx context.Context, workspaceID entity.WorkspaceID
 		topK = 5
 	}
 
+	// Try HNSW index first
+	if idx := s.getOrLoadIndex(ctx, workspaceID); idx != nil && idx.Size() > 0 {
+		return idx.Search(query, topK), nil
+	}
+
+	// Fallback: brute-force scan
 	rows, err := s.conn.Query(ctx, `
 		SELECT chunk_id, dimensions, vector
 		FROM chunk_embeddings

@@ -55,6 +55,17 @@ type Config struct {
 
 	// Tika settings
 	Tika TikaConfig `mapstructure:"tika"`
+
+	// Vision settings (image understanding via LLM vision models)
+	Vision VisionConfig `mapstructure:"vision"`
+}
+
+// VisionConfig holds image understanding settings.
+type VisionConfig struct {
+	Enabled       bool   `mapstructure:"enabled"`
+	Model         string `mapstructure:"model"`           // e.g., "llama3.2-vision"
+	MaxFileSizeMB int64  `mapstructure:"max_file_size_mb"` // default: 10
+	Prompt        string `mapstructure:"prompt"`
 }
 
 // LLMConfig holds LLM-specific configuration.
