@@ -145,14 +145,44 @@ func (s *VectorStore) BulkUpsert(ctx context.Context, workspaceID entity.Workspa
 
 // DeleteByDocument removes embeddings for a document's chunks.
 func (s *VectorStore) DeleteByDocument(ctx context.Context, workspaceID entity.WorkspaceID, documentID entity.DocumentID) error {
+	// Collect chunk IDs before deletion (needed to sync the HNSW index).
+	rows, err := s.conn.Query(ctx,
+		`SELECT id FROM chunks WHERE workspace_id = ? AND document_id = ?`,
+		workspaceID.String(), documentID.String())
+	if err != nil {
+		return err
+	}
+	var chunkIDs []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		chunkIDs = append(chunkIDs, id)
+	}
+	rows.Close()
+
+	// Delete from SQLite.
 	query := `
 		DELETE FROM chunk_embeddings
 		WHERE workspace_id = ? AND chunk_id IN (
 			SELECT id FROM chunks WHERE workspace_id = ? AND document_id = ?
 		)
 	`
-	_, err := s.conn.Exec(ctx, query, workspaceID.String(), workspaceID.String(), documentID.String())
-	return err
+	if _, err := s.conn.Exec(ctx, query, workspaceID.String(), workspaceID.String(), documentID.String()); err != nil {
+		return err
+	}
+
+	// Sync in-memory HNSW index.
+	if val, ok := s.indices.Load(workspaceID.String()); ok {
+		idx := val.(*HNSWIndex)
+		for _, id := range chunkIDs {
+			idx.Delete(id)
+		}
+	}
+
+	return nil
 }
 
 // Search performs a cosine similarity search. Uses the in-memory HNSW index

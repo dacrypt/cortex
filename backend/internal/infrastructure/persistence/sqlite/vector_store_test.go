@@ -175,7 +175,7 @@ func TestVectorStore_DeleteByDocument(t *testing.T) {
 		t.Fatalf("delete by document: %v", err)
 	}
 
-	// Search should only return chunk-db-1.
+	// Search with a neutral vector should only return chunk-db-1.
 	results, err := store.Search(ctx, wsID, []float32{1, 1, 1}, 10)
 	if err != nil {
 		t.Fatalf("search: %v", err)
@@ -185,6 +185,99 @@ func TestVectorStore_DeleteByDocument(t *testing.T) {
 	}
 	if results[0].ChunkID != "chunk-db-1" {
 		t.Errorf("expected chunk-db-1, got %s", results[0].ChunkID)
+	}
+
+	// Search with the exact vector of a deleted chunk — must NOT appear.
+	results2, err := store.Search(ctx, wsID, []float32{1, 0, 0}, 10)
+	if err != nil {
+		t.Fatalf("search deleted vector: %v", err)
+	}
+	for _, r := range results2 {
+		if r.ChunkID == "chunk-da-1" || r.ChunkID == "chunk-da-2" {
+			t.Errorf("deleted chunk %s should not appear in results", r.ChunkID)
+		}
+	}
+}
+
+func TestVectorStore_DeleteByDocument_HNSWSync(t *testing.T) {
+	t.Parallel()
+
+	store, conn := setupVectorStore(t)
+	ctx := context.Background()
+	wsID := entity.WorkspaceID("ws-hnsw-sync-1")
+	now := time.Now()
+	nowMs := now.UnixMilli()
+
+	docA := entity.DocumentID("doc-ha")
+	docB := entity.DocumentID("doc-hb")
+
+	chunksSQL := `INSERT INTO chunks (workspace_id, id, document_id, ordinal, heading, heading_path, text, token_count, start_line, end_line, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	for i, chunk := range []struct {
+		id  string
+		doc entity.DocumentID
+	}{
+		{"hnsw-da-1", docA},
+		{"hnsw-da-2", docA},
+		{"hnsw-db-1", docB},
+	} {
+		if _, err := conn.Exec(ctx, chunksSQL, wsID.String(), chunk.id, chunk.doc.String(), i, "h", "h", "t", 10, 0, 1, nowMs, nowMs); err != nil {
+			t.Fatalf("insert chunk %s: %v", chunk.id, err)
+		}
+	}
+
+	embeddings := []entity.ChunkEmbedding{
+		{ChunkID: "hnsw-da-1", Vector: []float32{1, 0, 0}, Dimensions: 3, UpdatedAt: now},
+		{ChunkID: "hnsw-da-2", Vector: []float32{0, 1, 0}, Dimensions: 3, UpdatedAt: now},
+		{ChunkID: "hnsw-db-1", Vector: []float32{0, 0, 1}, Dimensions: 3, UpdatedAt: now},
+	}
+	if err := store.BulkUpsert(ctx, wsID, embeddings); err != nil {
+		t.Fatalf("bulk upsert: %v", err)
+	}
+
+	// Force HNSW index to load by performing a search.
+	preResults, err := store.Search(ctx, wsID, []float32{1, 1, 1}, 10)
+	if err != nil {
+		t.Fatalf("pre-delete search: %v", err)
+	}
+	if len(preResults) != 3 {
+		t.Fatalf("expected 3 results before delete, got %d", len(preResults))
+	}
+
+	// Verify HNSW index is loaded and has 3 entries.
+	val, ok := store.indices.Load(wsID.String())
+	if !ok {
+		t.Fatal("expected HNSW index to be loaded")
+	}
+	idx := val.(*HNSWIndex)
+	if idx.Size() != 3 {
+		t.Fatalf("expected HNSW index size 3, got %d", idx.Size())
+	}
+
+	// Delete doc A.
+	if err := store.DeleteByDocument(ctx, wsID, docA); err != nil {
+		t.Fatalf("delete by document: %v", err)
+	}
+
+	// HNSW index should now have only 1 entry.
+	if idx.Size() != 1 {
+		t.Errorf("expected HNSW index size 1 after delete, got %d", idx.Size())
+	}
+
+	// Search with deleted chunk's exact vector — must not return deleted chunks.
+	postResults, err := store.Search(ctx, wsID, []float32{1, 0, 0}, 10)
+	if err != nil {
+		t.Fatalf("post-delete search: %v", err)
+	}
+	for _, r := range postResults {
+		if r.ChunkID == "hnsw-da-1" || r.ChunkID == "hnsw-da-2" {
+			t.Errorf("deleted chunk %s still returned by HNSW search", r.ChunkID)
+		}
+	}
+	if len(postResults) != 1 {
+		t.Fatalf("expected 1 result after delete, got %d", len(postResults))
+	}
+	if postResults[0].ChunkID != "hnsw-db-1" {
+		t.Errorf("expected hnsw-db-1, got %s", postResults[0].ChunkID)
 	}
 }
 
